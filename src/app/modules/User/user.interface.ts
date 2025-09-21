@@ -6,6 +6,7 @@ export interface IUser {
   email: string;
   password: string;
   role?: "professional" | "parent" | "admin";
+  roleRef?: "Professional" | "Parent";
   isActive?: boolean;
   otp?: string;
   expiresAt?: Date;

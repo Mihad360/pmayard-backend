@@ -19,11 +19,12 @@ const AvailabilitySchema = new Schema(
     date: { type: Date, required: true },
     timeSlots: { type: [TimeSlotSchema], required: true },
   },
-  { _id: false }, 
+  { _id: false },
 );
 
 const ProfessionalSchema = new Schema<IProfessional>(
   {
+    user: { type: Schema.Types.ObjectId, ref: "User" },
     name: { type: String, required: true },
     bio: { type: String, required: true },
     phoneNumber: { type: String, required: true },

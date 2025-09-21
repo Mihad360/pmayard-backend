@@ -17,7 +17,7 @@ export const ProfessionalSchema = z.object({
   phoneNumber: z
     .string()
     .regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format"),
-  profileImage: z.string().url("Profile image should be a valid URL"),
+  profileImage: z.string(),
   qualification: z.string().min(1, "Qualification is required"),
   subjects: z.array(z.string()).nonempty("At least one subject is required"),
   availability: z

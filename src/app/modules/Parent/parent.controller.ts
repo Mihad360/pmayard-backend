@@ -1,26 +1,22 @@
 import HttpStatus from "http-status";
 import catchAsync from "../../utils/catchAsync";
 import sendResponse from "../../utils/sendResponse";
-import { professionalServices } from "./professional.service";
+import { parentServices } from "./parent.service";
 import { JwtPayload } from "../../interface/global";
 
-const createProfessional = catchAsync(async (req, res) => {
+const createParent = catchAsync(async (req, res) => {
   const file = req.file as Express.Multer.File;
   const user = req.user as JwtPayload;
-  const result = await professionalServices.createProfessional(
-    file,
-    user,
-    req.body,
-  );
+  const result = await parentServices.createParent(file, user, req.body);
 
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "OTP verified successfully",
+    message: "Parent created successfully",
     data: result,
   });
 });
 
-export const professionalControllers = {
-  createProfessional,
+export const parentControllers = {
+  createParent,
 };

@@ -2,16 +2,16 @@
 import HttpStatus from "http-status";
 import mongoose, { Types } from "mongoose";
 import { JwtPayload } from "../../interface/global";
-import { IProfessional } from "./professional.interface";
 import { UserModel } from "../User/user.model";
+import { IParent } from "./parent.interface";
 import AppError from "../../erros/AppError";
-import { ProfessionalModel } from "./professional.model";
 import { sendFileToCloudinary } from "../../utils/sendImageToCloudinary";
+import { ParentModel } from "./parent.model";
 
-const createProfessional = async (
+const createParent = async (
   file: Express.Multer.File,
   user: JwtPayload,
-  payload: IProfessional,
+  payload: IParent,
 ) => {
   const userId = new Types.ObjectId(user.user);
   const session = await mongoose.startSession();
@@ -23,7 +23,7 @@ const createProfessional = async (
     if (!isUserExist) {
       throw new AppError(HttpStatus.NOT_FOUND, "The user is not found");
     }
-    const isParentExist = await ProfessionalModel.findById(isUserExist.roleId);
+    const isParentExist = await ParentModel.findById(isUserExist.roleId);
     if (isParentExist) {
       throw new AppError(HttpStatus.BAD_REQUEST, "The parent is already exist");
     }
@@ -39,19 +39,19 @@ const createProfessional = async (
     if (result) {
       payload.profileImage = result?.secure_url;
       payload.user = isUserExist._id;
-      const createPro = await ProfessionalModel.create([payload], { session });
+      const createPar = await ParentModel.create([payload], { session });
 
       await UserModel.findByIdAndUpdate(
         isUserExist._id,
         {
-          roleId: createPro[0]._id,
-          roleRef: "Professional",
+          roleId: createPar[0]._id,
+          roleRef: "Parent",
         },
         { new: true, session },
       );
 
       await session.commitTransaction();
-      return createPro[0];
+      return createPar[0];
     }
 
     throw new AppError(HttpStatus.BAD_REQUEST, "File upload failed");
@@ -66,6 +66,6 @@ const createProfessional = async (
   }
 };
 
-export const professionalServices = {
-  createProfessional,
+export const parentServices = {
+  createParent,
 };

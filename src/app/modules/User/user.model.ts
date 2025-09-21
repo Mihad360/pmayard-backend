@@ -6,7 +6,12 @@ const userSchema = new Schema<IUser, UserInterface>(
   {
     roleId: {
       type: Schema.Types.ObjectId,
+      refPath: "roleRef", // This refers to the 'role' field to determine the collection
       default: null,
+    },
+    roleRef: {
+      type: String,
+      enum: ["Professional", "Parent"], // This is the key for the dynamic reference
     },
     email: {
       type: String,

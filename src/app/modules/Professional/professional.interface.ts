@@ -1,3 +1,5 @@
+import { Types } from "mongoose";
+
 interface TimeSlot {
   startTime: string; // Start time of the slot (e.g., "9:00 AM")
   endTime: string; // End time of the slot (e.g., "10:00 AM")
@@ -10,6 +12,7 @@ interface Availability {
 }
 
 export interface IProfessional {
+  user?: Types.ObjectId;
   name: string;
   bio: string;
   phoneNumber: string;

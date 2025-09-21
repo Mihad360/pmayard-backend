@@ -1,0 +1,25 @@
+import express from "express";
+import auth from "../../middlewares/auth";
+import { adminControllers } from "./admin.controller";
+
+const router = express.Router();
+
+router.get("/parents", auth("admin"), adminControllers.getAllParents);
+router.get(
+  "/professionals",
+  auth("admin"),
+  adminControllers.getAllProfessionals,
+);
+router.get("/parents/:id", auth("admin"), adminControllers.getEachParent);
+router.post(
+  "/:parentId/assign-professional",
+  auth("admin"),
+  adminControllers.assignProfessional,
+);
+router.post(
+  "/:sessionId/set-session-code",
+  auth("admin"),
+  adminControllers.setCodeForSession,
+);
+
+export const AdminRoutes = router;

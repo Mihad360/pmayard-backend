@@ -1,13 +1,13 @@
 import express, { NextFunction, Request, Response } from "express";
 import auth from "../../middlewares/auth";
-import { professionalControllers } from "./professional.controller";
+import { parentControllers } from "./parent.controller";
 import { upload } from "../../utils/sendImageToCloudinary";
 
 const router = express.Router();
 
 router.post(
-  "/professional",
-  auth("professional"),
+  "/parent",
+  auth("parent"),
   upload.single("image"),
   (req: Request, res: Response, next: NextFunction) => {
     if (req.body.data) {
@@ -15,7 +15,7 @@ router.post(
     }
     next();
   },
-  professionalControllers.createProfessional,
+  parentControllers.createParent,
 );
 
-export const ProfessionalRoutes = router;
+export const ParentRoutes = router;

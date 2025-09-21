@@ -44,7 +44,9 @@ const registerUser = async (payload: IUser) => {
 
 const getMe = async (user: JwtPayload) => {
   const userId = new Types.ObjectId(user.user);
-  const isUserExist = await UserModel.findById(userId).select("-password");
+  const isUserExist = await UserModel.findById(userId)
+    .select("-password")
+    .populate("roleId");
   if (!isUserExist) {
     throw new AppError(HttpStatus.NOT_FOUND, "The user is not exist");
   }

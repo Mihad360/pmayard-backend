@@ -17,7 +17,7 @@ const auth = (...requiredRoles: TUserRole[]) => {
       );
     }
 
-    const token = headerToken.split(" ")[1];
+    const token = headerToken?.split(" ")[1];
     if (!token) {
       throw new AppError(HttpStatus.UNAUTHORIZED, "You are not authorized");
     }
