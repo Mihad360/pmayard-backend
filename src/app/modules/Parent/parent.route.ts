@@ -5,6 +5,21 @@ import { upload } from "../../utils/sendImageToCloudinary";
 
 const router = express.Router();
 
+router.get(
+  "/assigned-professionals",
+  auth("parent"),
+  parentControllers.getAssignedProfessionals,
+);
+router.get(
+  "/upcoming-professional-sessions",
+  auth("parent"),
+  parentControllers.getUpcomingProfessionalSessions,
+);
+router.get(
+  "/:parentId",
+  auth("admin", "professional", "parent"),
+  parentControllers.getEachParent,
+);
 router.post(
   "/parent",
   auth("parent"),
@@ -16,6 +31,11 @@ router.post(
     next();
   },
   parentControllers.createParent,
+);
+router.post(
+  "/verify-session",
+  auth("parent"),
+  parentControllers.verifySessionByCode,
 );
 
 export const ParentRoutes = router;

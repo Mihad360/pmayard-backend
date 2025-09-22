@@ -16,6 +16,32 @@ const getMySessions = catchAsync(async (req, res) => {
   });
 });
 
+const updateSessionStatus = catchAsync(async (req, res) => {
+  const id = req.params.sessionId;
+  const result = await sessionServices.updateSessionStatus(id, req.body);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "session retrieved successfully",
+    data: result,
+  });
+});
+
+const getEachSession = catchAsync(async (req, res) => {
+  const id = req.params.sessionId;
+  const result = await sessionServices.getEachSession(id);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "Session confirmed successfully",
+    data: result,
+  });
+});
+
 export const sessionControllers = {
   getMySessions,
+  updateSessionStatus,
+  getEachSession,
 };

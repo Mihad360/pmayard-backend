@@ -7,6 +7,7 @@ import { IParent } from "./parent.interface";
 import AppError from "../../erros/AppError";
 import { sendFileToCloudinary } from "../../utils/sendImageToCloudinary";
 import { ParentModel } from "./parent.model";
+import { SessionModel } from "../Session/session.model";
 
 const createParent = async (
   file: Express.Multer.File,
@@ -66,6 +67,96 @@ const createParent = async (
   }
 };
 
+const verifySessionByCode = async (
+  user: JwtPayload,
+  payload: { code: string },
+) => {
+  const userId = new Types.ObjectId(user.user);
+  const isParentExist = await ParentModel.findOne({ user: userId });
+  if (!isParentExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "Parent not found");
+  }
+  const isSessionExist = await SessionModel.findOne({
+    code: payload.code,
+    parent: isParentExist._id,
+  });
+  if (!isSessionExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "Session not found");
+  }
+  if (payload.code && payload.code !== isSessionExist.code) {
+    throw new AppError(HttpStatus.BAD_REQUEST, "Code is invalid");
+  }
+  const verifySession = await SessionModel.findByIdAndUpdate(
+    isSessionExist._id,
+    {
+      isSessionVerified: true,
+    },
+    {
+      new: true,
+    },
+  );
+  return verifySession;
+};
+
+const getEachParent = async (id: string) => {
+  const isSessionExist = await ParentModel.findById(id).populate({
+    path: "user",
+    select: "email",
+  });
+  if (!isSessionExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "Parent not found");
+  }
+  return isSessionExist;
+};
+
+const getAssignedProfessionals = async (user: JwtPayload) => {
+  const userId = new Types.ObjectId(user.user);
+  const isUserExist = await UserModel.findById(userId);
+  if (!isUserExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "User not found");
+  }
+  const session = await SessionModel.find({
+    parent: isUserExist.roleId,
+    isDeleted: false,
+    // status: "Upcoming",
+  })
+    .select("-day -date -time -subject -status -code -isSessionVerified")
+    .populate({
+      path: "professional",
+    });
+  if (!session) {
+    throw new AppError(HttpStatus.NOT_FOUND, "session not found");
+  }
+  return session;
+};
+
+const getUpcomingProfessionalSessions = async (user: JwtPayload) => {
+  const userId = new Types.ObjectId(user.user);
+  const isUserExist = await UserModel.findById(userId);
+  if (!isUserExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "User not found");
+  }
+  const session = await SessionModel.find({
+    parent: isUserExist.roleId,
+    isDeleted: false,
+    status: "Upcoming",
+  }).populate({
+    path: "professional",
+    populate: {
+      path: "user",
+      select: "email",
+    },
+  });
+  if (!session) {
+    throw new AppError(HttpStatus.NOT_FOUND, "session not found");
+  }
+  return session;
+};
+
 export const parentServices = {
   createParent,
+  verifySessionByCode,
+  getEachParent,
+  getAssignedProfessionals,
+  getUpcomingProfessionalSessions,
 };

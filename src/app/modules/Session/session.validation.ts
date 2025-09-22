@@ -19,3 +19,9 @@ export const sessionValidationSchema = z.object({
     status: z.enum(["Upcoming", "Completed", "Canceled"]),
   }),
 });
+
+export const sessionStatusValidationSchema = z.object({
+  body: z.object({
+    status: z.enum(["Completed", "Canceled"]),
+  }),
+});

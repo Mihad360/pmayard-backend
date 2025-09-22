@@ -21,6 +21,58 @@ const createProfessional = catchAsync(async (req, res) => {
   });
 });
 
+const confirmSession = catchAsync(async (req, res) => {
+  const id = req.params.sessionId;
+  const result = await professionalServices.confirmSession(id, req.body);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "Session confirmed successfully",
+    data: result,
+  });
+});
+
+const getAssignedParents = catchAsync(async (req, res) => {
+  const user = req.user as JwtPayload;
+  const result = await professionalServices.getAssignedParents(user);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "Session confirmed successfully",
+    data: result,
+  });
+});
+
+const getEachProfessional = catchAsync(async (req, res) => {
+  const id = req.params.professionalId;
+  const result = await professionalServices.getEachProfessional(id);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "Session confirmed successfully",
+    data: result,
+  });
+});
+
+const getUpcomingParentSessions = catchAsync(async (req, res) => {
+  const user = req.user as JwtPayload;
+  const result = await professionalServices.getUpcomingParentSessions(user);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "Session confirmed successfully",
+    data: result,
+  });
+});
+
 export const professionalControllers = {
   createProfessional,
+  confirmSession,
+  getAssignedParents,
+  getEachProfessional,
+  getUpcomingParentSessions,
 };

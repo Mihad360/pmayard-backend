@@ -4,6 +4,7 @@ import { JwtPayload } from "../../interface/global";
 import { UserModel } from "../User/user.model";
 import AppError from "../../erros/AppError";
 import { SessionModel } from "./session.model";
+import { ProfessionalModel } from "../Professional/professional.model";
 
 const getMySessions = async (user: JwtPayload) => {
   const userId = new Types.ObjectId(user.user);
@@ -32,6 +33,62 @@ const getMySessions = async (user: JwtPayload) => {
   throw new AppError(HttpStatus.NOT_FOUND, "Something went wrong");
 };
 
+const updateSessionStatus = async (
+  id: string,
+  payload: { status: "Completed" | "Canceled" },
+) => {
+  const isSessionExist = await SessionModel.findById(id);
+  if (!isSessionExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "Session not found");
+  }
+  const isProfessionalExist = await ProfessionalModel.findById(
+    isSessionExist.professional,
+  );
+  if (!isProfessionalExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "professional not found");
+  }
+  const result = await SessionModel.findByIdAndUpdate(
+    isSessionExist._id,
+    {
+      status: payload.status,
+    },
+    {
+      new: true,
+    },
+  );
+  if (result) {
+    const professional = isProfessionalExist;
+
+    const availabilityForDay = professional.availability.find(
+      (avail) => avail.day === isSessionExist.day,
+    );
+
+    const timeslotToUpdate = availabilityForDay?.timeSlots.find(
+      (slot) =>
+        slot.startTime === isSessionExist?.time?.startTime &&
+        slot.endTime === isSessionExist?.time?.endTime &&
+        slot.status === "booked",
+    );
+    if (timeslotToUpdate) {
+      timeslotToUpdate.status = "available";
+      await professional.save();
+      return result;
+    }
+  } else {
+    throw new AppError(HttpStatus.BAD_REQUEST, "Something went wrong");
+  }
+};
+
+const getEachSession = async (id: string) => {
+  const isSessionExist = await SessionModel.findById(id);
+  if (!isSessionExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "Session not found");
+  }
+  return isSessionExist;
+};
+
 export const sessionServices = {
   getMySessions,
+  updateSessionStatus,
+  getEachSession,
 };

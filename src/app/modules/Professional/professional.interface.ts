@@ -7,7 +7,14 @@ interface TimeSlot {
 }
 
 interface Availability {
-  date: Date; // Specific date for availability
+  day:
+    | "Monday"
+    | "Tuesday"
+    | "Wednesday"
+    | "Thursday"
+    | "Friday"
+    | "Saturday"
+    | "Sunday"; // Specific date for availability
   timeSlots: TimeSlot[]; // Multiple time slots for that day
 }
 

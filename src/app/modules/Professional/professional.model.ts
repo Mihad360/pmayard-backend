@@ -11,15 +11,26 @@ const TimeSlotSchema = new Schema(
       required: true,
     },
   },
-  { _id: false },
+  // { _id: false },
 );
 
 const AvailabilitySchema = new Schema(
   {
-    date: { type: Date, required: true },
+    day: {
+      type: String,
+      enum: [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+      ],
+    },
     timeSlots: { type: [TimeSlotSchema], required: true },
   },
-  { _id: false },
+  // { _id: false },
 );
 
 const ProfessionalSchema = new Schema<IProfessional>(

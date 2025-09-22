@@ -7,7 +7,15 @@ const TimeSlotSchema = z.object({
 });
 
 const AvailabilitySchema = z.object({
-  date: z.date(),
+  day: z.enum([
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ]),
   timeSlots: z.array(TimeSlotSchema),
 });
 

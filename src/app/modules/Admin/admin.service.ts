@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import HttpStatus from "http-status";
 import { Types } from "mongoose";
 import { JwtPayload } from "../../interface/global";
@@ -6,7 +5,11 @@ import { UserModel } from "../User/user.model";
 import AppError from "../../erros/AppError";
 import { ParentModel } from "../Parent/parent.model";
 import QueryBuilder from "../../../builder/QueryBuilder";
-import { parentSearch, professionalSearch } from "./admin.utils";
+import {
+  parentSearch,
+  professionalSearch,
+  sendAssignmentEmail,
+} from "./admin.utils";
 import { ProfessionalModel } from "../Professional/professional.model";
 import { ISession } from "../Session/session.interface";
 import { SessionModel } from "../Session/session.model";
@@ -111,6 +114,20 @@ const setCodeForSession = async (
   if (!isSessionExist) {
     throw new AppError(HttpStatus.NOT_FOUND, "Session not found");
   }
+  const isParentExist = await ParentModel.findById(isSessionExist.parent);
+  if (!isParentExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "Parent not found");
+  }
+  const isUserExist = await UserModel.findById(isParentExist?.user);
+  if (!isUserExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "User not found");
+  }
+  const isProfessionalExist = await ProfessionalModel.findById(
+    isSessionExist.professional,
+  );
+  if (!isProfessionalExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "professional not found");
+  }
   const isCodeMatch = await SessionModel.findOne({
     $and: [{ code: payload.code, status: "Upcoming" }],
   });
@@ -126,7 +143,10 @@ const setCodeForSession = async (
       new: true,
     },
   );
-  
+
+  if (result) {
+    await sendAssignmentEmail(result.professional, result.parent, result.code);
+  }
   return result;
 };
 
