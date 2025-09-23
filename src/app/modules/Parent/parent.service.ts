@@ -8,6 +8,7 @@ import AppError from "../../erros/AppError";
 import { sendFileToCloudinary } from "../../utils/sendImageToCloudinary";
 import { ParentModel } from "./parent.model";
 import { SessionModel } from "../Session/session.model";
+import QueryBuilder from "../../../builder/QueryBuilder";
 
 const createParent = async (
   file: Express.Multer.File,
@@ -130,27 +131,35 @@ const getAssignedProfessionals = async (user: JwtPayload) => {
   return session;
 };
 
-const getUpcomingProfessionalSessions = async (user: JwtPayload) => {
+const getUpcomingProfessionalSessions = async (
+  user: JwtPayload,
+  query: Record<string, unknown>,
+) => {
   const userId = new Types.ObjectId(user.user);
   const isUserExist = await UserModel.findById(userId);
   if (!isUserExist) {
     throw new AppError(HttpStatus.NOT_FOUND, "User not found");
   }
-  const session = await SessionModel.find({
-    parent: isUserExist.roleId,
-    isDeleted: false,
-    status: "Upcoming",
-  }).populate({
-    path: "professional",
-    populate: {
-      path: "user",
-      select: "email",
-    },
-  });
+  const session = new QueryBuilder(
+    SessionModel.find({
+      parent: isUserExist.roleId,
+      isDeleted: false,
+      status: "Upcoming",
+    }).populate({
+      path: "professional",
+      populate: {
+        path: "user",
+        select: "email",
+      },
+    }),
+    query,
+  ).filter();
   if (!session) {
     throw new AppError(HttpStatus.NOT_FOUND, "session not found");
   }
-  return session;
+  const meta = await session.countTotal();
+  const result = await session.modelQuery;
+  return { meta, result };
 };
 
 export const parentServices = {

@@ -10,6 +10,7 @@ import { sendFileToCloudinary } from "../../utils/sendImageToCloudinary";
 import { ISession } from "../Session/session.interface";
 import { SessionModel } from "../Session/session.model";
 import dayjs from "dayjs";
+import QueryBuilder from "../../../builder/QueryBuilder";
 
 const createProfessional = async (
   file: Express.Multer.File,
@@ -151,27 +152,36 @@ const getEachProfessional = async (id: string) => {
   return isSessionExist;
 };
 
-const getUpcomingParentSessions = async (user: JwtPayload) => {
+const getUpcomingParentSessions = async (
+  user: JwtPayload,
+  query: Record<string, unknown>,
+) => {
   const userId = new Types.ObjectId(user.user);
   const isUserExist = await UserModel.findById(userId);
   if (!isUserExist) {
     throw new AppError(HttpStatus.NOT_FOUND, "User not found");
   }
-  const session = await SessionModel.find({
-    professional: isUserExist.roleId,
-    isDeleted: false,
-    status: "Upcoming",
-  }).populate({
-    path: "parent",
-    populate: {
-      path: "user",
-      select: "email",
-    },
-  });
+  const session = new QueryBuilder(
+    SessionModel.find({
+      professional: isUserExist.roleId,
+      isDeleted: false,
+      status: "Upcoming",
+    }).populate({
+      path: "parent",
+      populate: {
+        path: "user",
+        select: "email",
+      },
+    }),
+    query,
+  ).filter();
+
   if (!session) {
     throw new AppError(HttpStatus.NOT_FOUND, "session not found");
   }
-  return session;
+  const meta = await session.countTotal();
+  const result = await session.modelQuery;
+  return { meta, result };
 };
 
 export const professionalServices = {

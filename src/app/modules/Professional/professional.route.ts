@@ -6,14 +6,14 @@ import { upload } from "../../utils/sendImageToCloudinary";
 const router = express.Router();
 
 router.get(
-  "/assigned-parents",
-  auth("professional"),
-  professionalControllers.getAssignedParents,
-);
-router.get(
   "/upcoming-parent-sessions",
   auth("professional"),
   professionalControllers.getUpcomingParentSessions,
+);
+router.get(
+  "/assigned-parents",
+  auth("professional"),
+  professionalControllers.getAssignedParents,
 );
 router.get(
   "/:professionalId",

@@ -55,13 +55,17 @@ const getAssignedProfessionals = catchAsync(async (req, res) => {
 
 const getUpcomingProfessionalSessions = catchAsync(async (req, res) => {
   const user = req.user as JwtPayload;
-  const result = await parentServices.getUpcomingProfessionalSessions(user);
+  const result = await parentServices.getUpcomingProfessionalSessions(
+    user,
+    req.query,
+  );
 
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
     message: "Session confirmed successfully",
-    data: result,
+    meta: result.meta,
+    data: result.result,
   });
 });
 

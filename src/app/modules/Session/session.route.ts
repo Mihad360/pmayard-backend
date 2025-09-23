@@ -7,14 +7,14 @@ import { sessionStatusValidationSchema } from "./session.validation";
 const router = express.Router();
 
 router.get(
-  "/:sessionId",
-  auth("admin", "professional", "parent"),
-  sessionControllers.getEachSession,
-);
-router.get(
   "/my-sessions",
   auth("parent", "professional"),
   sessionControllers.getMySessions,
+);
+router.get(
+  "/:sessionId",
+  auth("admin", "professional", "parent"),
+  sessionControllers.getEachSession,
 );
 router.patch(
   "/:sessionId/status",

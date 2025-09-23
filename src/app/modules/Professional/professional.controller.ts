@@ -59,13 +59,17 @@ const getEachProfessional = catchAsync(async (req, res) => {
 
 const getUpcomingParentSessions = catchAsync(async (req, res) => {
   const user = req.user as JwtPayload;
-  const result = await professionalServices.getUpcomingParentSessions(user);
+  const result = await professionalServices.getUpcomingParentSessions(
+    user,
+    req.query,
+  );
 
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
     message: "Session confirmed successfully",
-    data: result,
+    meta: result.meta,
+    data: result.result,
   });
 });
 
