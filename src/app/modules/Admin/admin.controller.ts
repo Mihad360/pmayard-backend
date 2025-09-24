@@ -26,6 +26,20 @@ const getAllProfessionals = catchAsync(async (req, res) => {
     success: true,
     message: "data retrieved successfully",
     meta: result.meta,
+    sessions: result.sessions,
+    data: result.result,
+  });
+});
+
+const getAllSessions = catchAsync(async (req, res) => {
+  const user = req.user as JwtPayload;
+  const result = await adminServices.getAllSessions(user, req.query);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "data retrieved successfully",
+    meta: result.meta,
     data: result.result,
   });
 });
@@ -72,4 +86,5 @@ export const adminControllers = {
   getEachParent,
   assignProfessional,
   setCodeForSession,
+  getAllSessions,
 };

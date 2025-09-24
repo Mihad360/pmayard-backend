@@ -165,7 +165,7 @@ const getUpcomingParentSessions = async (
     SessionModel.find({
       professional: isUserExist.roleId,
       isDeleted: false,
-      status: "Upcoming",
+      status: { $in: ["Upcoming", "Confirmed"] },
     }).populate({
       path: "parent",
       populate: {

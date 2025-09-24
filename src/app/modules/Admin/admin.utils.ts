@@ -4,6 +4,7 @@ import { ParentModel } from "../Parent/parent.model";
 import { ProfessionalModel } from "../Professional/professional.model";
 import { UserModel } from "../User/user.model";
 
+export const sessionSearch = ["day", "subject", "status"];
 export const parentSearch = [
   "name",
   "phoneNumber",

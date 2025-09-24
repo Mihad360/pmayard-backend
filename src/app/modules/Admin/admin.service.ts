@@ -9,6 +9,7 @@ import {
   parentSearch,
   professionalSearch,
   sendAssignmentEmail,
+  sessionSearch,
 } from "./admin.utils";
 import { ProfessionalModel } from "../Professional/professional.model";
 import { ISession } from "../Session/session.interface";
@@ -47,11 +48,43 @@ const getAllProfessionals = async (
   if (!isUserExist) {
     throw new AppError(HttpStatus.NOT_FOUND, "The user is not exist");
   }
+  const sessions = await SessionModel.countDocuments({
+    professional: isUserExist.roleId,
+    status: "Completed",
+  });
+  console.log(sessions);
   const professionalsQuery = new QueryBuilder(
-    ProfessionalModel.find({ isDeleted: false }),
+    ProfessionalModel.find({ isDeleted: false }).populate({
+      path: "user",
+      select: "-password",
+    }),
     query,
   )
     .search(professionalSearch)
+    .filter()
+    .sort()
+    .paginate()
+    .fields();
+
+  const meta = await professionalsQuery.countTotal();
+  const result = await professionalsQuery.modelQuery;
+  return { meta, sessions, result };
+};
+
+const getAllSessions = async (
+  user: JwtPayload,
+  query: Record<string, unknown>,
+) => {
+  const userId = new Types.ObjectId(user.user);
+  const isUserExist = await UserModel.findById(userId);
+  if (!isUserExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "The user is not exist");
+  }
+  const professionalsQuery = new QueryBuilder(
+    SessionModel.find({ isDeleted: false }).populate("parent professional"),
+    query,
+  )
+    .search(sessionSearch)
     .filter()
     .sort()
     .paginate()
@@ -156,4 +189,5 @@ export const adminServices = {
   getEachParent,
   assignProfessional,
   setCodeForSession,
+  getAllSessions,
 };
