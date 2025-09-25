@@ -5,6 +5,8 @@ import { ProfessionalRoutes } from "../modules/Professional/professional.route";
 import { ParentRoutes } from "../modules/Parent/parent.route";
 import { AdminRoutes } from "../modules/Admin/admin.route";
 import { SessionRoutes } from "../modules/Session/session.route";
+import { GradeRoutes } from "../modules/Grade/grade.route";
+import { SubjectRoutes } from "../modules/Subject/subject.route";
 
 const router = Router();
 
@@ -32,6 +34,14 @@ const moduleRoutes = [
   {
     path: "/sessions",
     route: SessionRoutes,
+  },
+  {
+    path: "/grades",
+    route: GradeRoutes,
+  },
+  {
+    path: "/subjects",
+    route: SubjectRoutes,
   },
 ];
 
