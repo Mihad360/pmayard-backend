@@ -7,6 +7,7 @@ import { AdminRoutes } from "../modules/Admin/admin.route";
 import { SessionRoutes } from "../modules/Session/session.route";
 import { GradeRoutes } from "../modules/Grade/grade.route";
 import { SubjectRoutes } from "../modules/Subject/subject.route";
+import { MaterialRoutes } from "../modules/Materials/material.route";
 
 const router = Router();
 
@@ -42,6 +43,10 @@ const moduleRoutes = [
   {
     path: "/subjects",
     route: SubjectRoutes,
+  },
+  {
+    path: "/materials",
+    route: MaterialRoutes,
   },
 ];
 

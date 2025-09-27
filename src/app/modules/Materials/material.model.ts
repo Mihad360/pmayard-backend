@@ -12,18 +12,14 @@ const materialSchema = new Schema<IMaterial>(
       type: String,
       required: true,
     },
-    files: [
-      {
-        fileUrl: {
-          type: String,
-          required: true,
-        },
-        mimeType: {
-          type: String,
-          required: true,
-        },
-      },
-    ],
+    fileUrl: {
+      type: String,
+      required: true,
+    },
+    mimeType: {
+      type: String,
+      required: true,
+    },
     isDeleted: {
       type: Boolean,
       default: false,
