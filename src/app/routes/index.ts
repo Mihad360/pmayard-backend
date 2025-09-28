@@ -8,6 +8,7 @@ import { SessionRoutes } from "../modules/Session/session.route";
 import { GradeRoutes } from "../modules/Grade/grade.route";
 import { SubjectRoutes } from "../modules/Subject/subject.route";
 import { MaterialRoutes } from "../modules/Materials/material.route";
+import { EventRoutes } from "../modules/Event/event.route";
 
 const router = Router();
 
@@ -47,6 +48,10 @@ const moduleRoutes = [
   {
     path: "/materials",
     route: MaterialRoutes,
+  },
+  {
+    path: "/events",
+    route: EventRoutes,
   },
 ];
 

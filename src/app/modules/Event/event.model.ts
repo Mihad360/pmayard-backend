@@ -3,19 +3,19 @@ import IEvent from "./event.interface";
 
 const eventSchema: Schema<IEvent> = new Schema(
   {
-    user: {
-      type: Schema.Types.ObjectId,
-      ref: "User", // Assuming User is the model you are referencing
-      required: true,
-    },
+    // user: {
+    //   type: Schema.Types.ObjectId,
+    //   ref: "User",
+    // },
     name: { type: String, required: true },
-    startTime: { type: String, required: true }, // If you need Date, change type to Date
+    startTime: { type: String, required: true },
     endTime: { type: String, required: true },
-    eventDate: { type: String, required: true }, // If you need Date, change type to Date
-    description: { type: String }, // Array of strings
+    eventDate: { type: Date, required: true },
+    description: { type: String },
+    status: { type: String, enum: ["Upcoming", "Completed", "Canceled"] },
     isDeleted: { type: Boolean, default: false },
   },
-  { timestamps: true }, // automatically adds createdAt and updatedAt fields
+  { timestamps: true },
 );
 
-export const Event = model<IEvent>("Event", eventSchema);
+export const EventModel = model<IEvent>("Event", eventSchema);
