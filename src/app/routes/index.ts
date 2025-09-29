@@ -9,6 +9,7 @@ import { GradeRoutes } from "../modules/Grade/grade.route";
 import { SubjectRoutes } from "../modules/Subject/subject.route";
 import { MaterialRoutes } from "../modules/Materials/material.route";
 import { EventRoutes } from "../modules/Event/event.route";
+import { MessageRoutes } from "../modules/Message/message.route";
 
 const router = Router();
 
@@ -52,6 +53,10 @@ const moduleRoutes = [
   {
     path: "/events",
     route: EventRoutes,
+  },
+  {
+    path: "/messages",
+    route: MessageRoutes,
   },
 ];
 

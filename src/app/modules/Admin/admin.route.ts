@@ -22,5 +22,10 @@ router.post(
   auth("admin"),
   adminControllers.setCodeForSession,
 );
+router.post(
+  "/:parentId/:professionalId/assign-professional",
+  auth("admin"),
+  adminControllers.assignProfessionalAndSetCode,
+);
 
 export const AdminRoutes = router;

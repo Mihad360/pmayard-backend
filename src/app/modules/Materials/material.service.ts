@@ -11,29 +11,46 @@ const materialSearch = ["title", "mimeType"];
 const addMaterial = async (
   subjectId: string,
   payload: IMaterial,
-  file: Express.Multer.File,
+  files: Express.Multer.File[], // Expecting an array of files
 ) => {
   const isSubjectExist = await SubjectModel.findById(subjectId);
   if (!isSubjectExist) {
     throw new AppError(HttpStatus.NOT_FOUND, "Subject not found");
   }
-  if (!file) {
-    throw new AppError(HttpStatus.NOT_FOUND, "The file is not found");
+  if (!files || files.length === 0) {
+    throw new AppError(HttpStatus.NOT_FOUND, "No files found");
   }
-  const result = await sendFileToCloudinary(
-    file.buffer,
-    file.originalname,
-    file.mimetype,
+
+  // Loop through each file and upload to Cloudinary
+  const materials = await Promise.all(
+    files.map(async (file) => {
+      const result = await sendFileToCloudinary(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+      );
+      if (!result) {
+        throw new AppError(
+          HttpStatus.BAD_REQUEST,
+          "Something went wrong during file upload",
+        );
+      }
+
+      // Create a new payload for each file
+      const materialPayload = {
+        ...payload,
+        fileUrl: result.secure_url,
+        mimeType: file.mimetype,
+        subjectId: isSubjectExist._id,
+      };
+
+      // Create a new material in the database for each file
+      const material = await MaterialModel.create(materialPayload);
+      return material;
+    }),
   );
-  if (result) {
-    payload.fileUrl = result.secure_url;
-    payload.mimeType = file.mimetype;
-    payload.subjectId = isSubjectExist._id;
-    const material = await MaterialModel.create(payload);
-    return material;
-  } else {
-    throw new AppError(HttpStatus.BAD_REQUEST, "Something went wrong");
-  }
+
+  return materials;
 };
 
 const getMaterials = async (

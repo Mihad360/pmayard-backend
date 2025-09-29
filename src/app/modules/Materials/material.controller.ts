@@ -5,8 +5,8 @@ import { materialServices } from "./material.service";
 
 const addMaterial = catchAsync(async (req, res) => {
   const id = req.params.subjectId;
-  const file = req.file as Express.Multer.File;
-  const result = await materialServices.addMaterial(id, req.body, file);
+  const files = req.files as Express.Multer.File[];
+  const result = await materialServices.addMaterial(id, req.body, files);
 
   sendResponse(res, {
     statusCode: HttpStatus.OK,

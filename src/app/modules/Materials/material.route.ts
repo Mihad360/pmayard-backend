@@ -13,7 +13,7 @@ router.get(
 router.post(
   "/add-material/:subjectId",
   auth("admin"),
-  upload.single("file"),
+  upload.array("file"),
   (req: Request, res: Response, next: NextFunction) => {
     if (req.body.data) {
       req.body = JSON.parse(req.body.data);

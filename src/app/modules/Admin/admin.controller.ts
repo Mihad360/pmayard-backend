@@ -80,6 +80,23 @@ const setCodeForSession = catchAsync(async (req, res) => {
   });
 });
 
+const assignProfessionalAndSetCode = catchAsync(async (req, res) => {
+  const id1 = req.params.parentId;
+  const id2 = req.params.professionalId;
+  const result = await adminServices.assignProfessionalAndSetCode(
+    id1,
+    id2,
+    req.body,
+  );
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "data retrieved successfully",
+    data: result,
+  });
+});
+
 export const adminControllers = {
   getAllParents,
   getAllProfessionals,
@@ -87,4 +104,5 @@ export const adminControllers = {
   assignProfessional,
   setCodeForSession,
   getAllSessions,
+  assignProfessionalAndSetCode,
 };

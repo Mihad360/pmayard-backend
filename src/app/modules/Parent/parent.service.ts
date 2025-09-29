@@ -9,6 +9,9 @@ import { sendFileToCloudinary } from "../../utils/sendImageToCloudinary";
 import { ParentModel } from "./parent.model";
 import { SessionModel } from "../Session/session.model";
 import QueryBuilder from "../../../builder/QueryBuilder";
+import { ChatModel } from "../Chat/chat.model";
+import { GroupMembership } from "../GroupMember/members.model";
+import { GroupModel } from "../ChatParticipant/group.model";
 
 const createParent = async (
   file: Express.Multer.File,
@@ -20,19 +23,25 @@ const createParent = async (
 
   try {
     session.startTransaction();
-    const isUserExist = await UserModel.findById(userId).populate("roleId");
 
+    // Check if the user exists
+    const isUserExist = await UserModel.findById(userId).populate("roleId");
     if (!isUserExist) {
       throw new AppError(HttpStatus.NOT_FOUND, "The user is not found");
     }
+
+    // Check if the parent already exists
     const isParentExist = await ParentModel.findById(isUserExist.roleId);
     if (isParentExist) {
-      throw new AppError(HttpStatus.BAD_REQUEST, "The parent is already exist");
+      throw new AppError(HttpStatus.BAD_REQUEST, "The parent already exists");
     }
+
+    // Check if file is provided
     if (!file) {
       throw new AppError(HttpStatus.NOT_FOUND, "The file is not found");
     }
 
+    // Upload file to Cloudinary
     const result = await sendFileToCloudinary(
       file.buffer,
       file.originalname,
@@ -41,19 +50,60 @@ const createParent = async (
     if (result) {
       payload.profileImage = result?.secure_url;
       payload.user = isUserExist._id;
-      const createPar = await ParentModel.create([payload], { session });
 
+      // Create Parent
+      const createdParent = await ParentModel.create([payload], { session });
+
+      // Update the user with the parent role
       await UserModel.findByIdAndUpdate(
         isUserExist._id,
-        {
-          roleId: createPar[0]._id,
-          roleRef: "Parent",
-        },
+        { roleId: createdParent[0]._id, roleRef: "Parent" },
         { new: true, session },
       );
 
+      // Step 1: Check if Parent Group exists
+      let parentGroup = await GroupModel.findOne({
+        group_name: "Parent Group",
+      });
+
+      if (!parentGroup) {
+        // Step 2: Create Parent Group if it doesn't exist
+        parentGroup = new GroupModel({
+          group_name: "Parent Group",
+          is_announcement_group: false, // Not an announcement-only group
+        });
+        await parentGroup.save({ session });
+      }
+
+      // Step 3: Add the Parent to the Parent Group
+      await GroupMembership.create(
+        [
+          {
+            user_id: createdParent[0].user, // Add the parent to the group
+            group_id: parentGroup._id,
+            role: "Member",
+          },
+        ],
+        { session },
+      );
+
+      // Step 4: Find Admin User (programmatically)
+      const adminUser = await UserModel.findOne({ roleRef: "Admin" }); // Assuming roleRef identifies admins
+      if (!adminUser) {
+        throw new AppError(HttpStatus.NOT_FOUND, "Admin user not found");
+      }
+
+      // Step 5: Create an individual chat between the Admin and the Parent
+      const chat = new ChatModel({
+        chatType: "individual",
+        users: [adminUser._id, createdParent[0].user], // Add both Admin and Parent as users
+      });
+      await chat.save({ session });
+
+      // Commit the transaction after all steps
       await session.commitTransaction();
-      return createPar[0];
+
+      return createdParent[0];
     }
 
     throw new AppError(HttpStatus.BAD_REQUEST, "File upload failed");

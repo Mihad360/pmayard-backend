@@ -11,6 +11,9 @@ import { ISession } from "../Session/session.interface";
 import { SessionModel } from "../Session/session.model";
 import dayjs from "dayjs";
 import QueryBuilder from "../../../builder/QueryBuilder";
+import { ChatModel } from "../Chat/chat.model";
+import { GroupMembership } from "../GroupMember/members.model";
+import { GroupModel } from "../ChatParticipant/group.model";
 
 const createProfessional = async (
   file: Express.Multer.File,
@@ -22,19 +25,30 @@ const createProfessional = async (
 
   try {
     session.startTransaction();
-    const isUserExist = await UserModel.findById(userId).populate("roleId");
 
+    // Check if the user exists
+    const isUserExist = await UserModel.findById(userId).populate("roleId");
     if (!isUserExist) {
       throw new AppError(HttpStatus.NOT_FOUND, "The user is not found");
     }
-    const isParentExist = await ProfessionalModel.findById(isUserExist.roleId);
-    if (isParentExist) {
-      throw new AppError(HttpStatus.BAD_REQUEST, "The parent is already exist");
+
+    // Check if the professional already exists
+    const isProfessionalExist = await ProfessionalModel.findById(
+      isUserExist.roleId,
+    );
+    if (isProfessionalExist) {
+      throw new AppError(
+        HttpStatus.BAD_REQUEST,
+        "The professional already exists",
+      );
     }
+
+    // Check if the file is provided
     if (!file) {
       throw new AppError(HttpStatus.NOT_FOUND, "The file is not found");
     }
 
+    // Upload the file to Cloudinary
     const result = await sendFileToCloudinary(
       file.buffer,
       file.originalname,
@@ -43,19 +57,60 @@ const createProfessional = async (
     if (result) {
       payload.profileImage = result?.secure_url;
       payload.user = isUserExist._id;
-      const createPro = await ProfessionalModel.create([payload], { session });
 
+      // Create the professional in the database
+      const createdProfessional = await ProfessionalModel.create([payload], {
+        session,
+      });
+
+      // Update the user with the professional role
       await UserModel.findByIdAndUpdate(
         isUserExist._id,
-        {
-          roleId: createPro[0]._id,
-          roleRef: "Professional",
-        },
+        { roleId: createdProfessional[0]._id, roleRef: "Professional" },
         { new: true, session },
       );
 
+      // Step 1: Check if Admin Group exists
+      let adminGroup = await GroupModel.findOne({ group_name: "Admin Group" });
+
+      if (!adminGroup) {
+        // Step 2: Create Admin Group if it doesn't exist
+        adminGroup = new GroupModel({
+          group_name: "Admin Group",
+          is_announcement_group: false, // Not an announcement-only group
+        });
+        await adminGroup.save({ session });
+      }
+
+      // Step 3: Add the Professional to the Admin Group
+      await GroupMembership.create(
+        [
+          {
+            user_id: createdProfessional[0].user, // Add the professional to the group
+            group_id: adminGroup._id,
+            role: "Member",
+          },
+        ],
+        { session },
+      );
+
+      // Step 4: Find Admin User (programmatically)
+      const adminUser = await UserModel.findOne({ role: "admin" }); // Assuming roleRef identifies admins
+      if (!adminUser) {
+        throw new AppError(HttpStatus.NOT_FOUND, "Admin user not found");
+      }
+
+      // Step 5: Create an individual chat between the Admin and the Professional
+      const chat = new ChatModel({
+        chatType: "individual",
+        users: [adminUser._id, createdProfessional[0].user], // Add both Admin and Professional as users
+      });
+      await chat.save({ session });
+
+      // Commit the transaction after all steps
       await session.commitTransaction();
-      return createPro[0];
+
+      return createdProfessional[0];
     }
 
     throw new AppError(HttpStatus.BAD_REQUEST, "File upload failed");

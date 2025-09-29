@@ -33,13 +33,11 @@ export const sendAssignmentEmail = async (
       throw new Error("Professional not found");
     }
 
-    // Find the parent details
     const parentExist = await ParentModel.findById(parentId).populate("user");
     if (!parentExist) {
       throw new Error("Parent not found");
     }
 
-    // Fetch the user's email (from the Parent model)
     const parentEmail = await UserModel.findById(parentExist.user);
     const email = parentEmail?.email;
 

@@ -183,6 +183,63 @@ const setCodeForSession = async (
   return result;
 };
 
+const assignProfessionalAndSetCode = async (
+  parentId: string,
+  professionalId: string,
+  payload: ISession,
+) => {
+  const isParentExist = await ParentModel.findById(parentId);
+  if (!isParentExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "Parent not found");
+  }
+
+  const isProfessionalExist = await ProfessionalModel.findById(professionalId);
+  if (!isProfessionalExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "Professional not found");
+  }
+
+  const availability = isProfessionalExist?.availability;
+  const isAvailable = availability.some((avail) =>
+    avail.timeSlots.find((slot) => slot.status === "available"),
+  );
+
+  if (!isAvailable) {
+    throw new AppError(
+      HttpStatus.BAD_REQUEST,
+      "No available time slots for this professional",
+    );
+  }
+  const isCodeMatch = await SessionModel.findOne({
+    $and: [{ code: payload.code, status: "Upcoming" }],
+  });
+  if (isCodeMatch) {
+    throw new AppError(HttpStatus.BAD_REQUEST, "Please enter a new code");
+  }
+
+  payload.parent = isParentExist._id;
+  payload.professional = isProfessionalExist._id;
+  payload.status = "Upcoming";
+  // payload.day = dayjs(payload.date).format("dddd");
+
+  const sessionResult = await SessionModel.create(payload);
+
+  const updatedSession = await SessionModel.findByIdAndUpdate(
+    sessionResult._id,
+    { code: payload.code },
+    { new: true },
+  );
+
+  if (updatedSession) {
+    await sendAssignmentEmail(
+      updatedSession.professional,
+      updatedSession.parent,
+      updatedSession.code,
+    );
+  }
+
+  return updatedSession;
+};
+
 export const adminServices = {
   getAllParents,
   getAllProfessionals,
@@ -190,4 +247,5 @@ export const adminServices = {
   assignProfessional,
   setCodeForSession,
   getAllSessions,
+  assignProfessionalAndSetCode,
 };

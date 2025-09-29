@@ -8,6 +8,14 @@ const chatSchema = new Schema<IChat>(
       enum: ["individual", "group", "announcement"],
       required: true,
     },
+    users: {
+      type: [Schema.Types.ObjectId],
+      ref: "User",
+    },
+    group_id: {
+      type: Schema.Types.ObjectId,
+      ref: "Group",
+    },
     isDeleted: {
       type: Boolean,
       default: false,

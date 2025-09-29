@@ -16,7 +16,7 @@ const auth = (...requiredRoles: TUserRole[]) => {
         "No token provided or bad format",
       );
     }
-
+    // console.log(headerToken);
     const token = headerToken?.split(" ")[1];
     if (!token) {
       throw new AppError(HttpStatus.UNAUTHORIZED, "You are not authorized");
@@ -45,11 +45,11 @@ const auth = (...requiredRoles: TUserRole[]) => {
     if (role === undefined) {
       throw new Error("Role is undefined");
     }
+    // console.log(role);
 
     if (requiredRoles && !requiredRoles.includes(role)) {
       throw new AppError(HttpStatus.UNAUTHORIZED, "You are not authorized");
     }
-
     if (
       user.passwordChangedAt &&
       (await UserModel.isOldTokenValid(user.passwordChangedAt, iat as number))
