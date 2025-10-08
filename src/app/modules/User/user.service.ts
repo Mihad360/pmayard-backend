@@ -44,15 +44,21 @@ const registerUser = async (payload: IUser) => {
 
 const getMe = async (user: JwtPayload) => {
   const userId = new Types.ObjectId(user.user);
-  const isUserExist = await UserModel.findById(userId)
-    .select("-password")
-    .populate("roleId");
+  const isUserExist = await UserModel.findById(userId).select("-password");
+
   if (!isUserExist) {
-    throw new AppError(HttpStatus.NOT_FOUND, "The user is not exist");
+    throw new AppError(HttpStatus.NOT_FOUND, "The user does not exist");
   }
+
   if (isUserExist.isDeleted) {
     throw new AppError(HttpStatus.NOT_FOUND, "The user is blocked");
   }
+
+  // Skip population if role is 'admin'
+  if (isUserExist.role !== "admin") {
+    await isUserExist.populate("roleId");
+  }
+
   return isUserExist;
 };
 

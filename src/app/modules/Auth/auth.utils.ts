@@ -31,6 +31,6 @@ export const checkOtp = async (email: string, otp: string) => {
       isVerified: true,
     },
     { new: true },
-  );
+  ).select("-password");
   return updateUser;
 };

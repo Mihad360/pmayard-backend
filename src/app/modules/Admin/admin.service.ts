@@ -81,7 +81,9 @@ const getAllSessions = async (
     throw new AppError(HttpStatus.NOT_FOUND, "The user is not exist");
   }
   const professionalsQuery = new QueryBuilder(
-    SessionModel.find({ isDeleted: false }).populate("parent professional"),
+    SessionModel.find({ isDeleted: false })
+      .populate({ path: "parent", select: "name profileImage" })
+      .populate({ path: "professional", select: "name profileImage" }),
     query,
   )
     .search(sessionSearch)
@@ -240,6 +242,73 @@ const assignProfessionalAndSetCode = async (
   return updatedSession;
 };
 
+const getAllParentAssignedProfessionals = async (id: string) => {
+  // Find all sessions associated with the parent
+  const sessions = await SessionModel.find({ parent: id });
+
+  // If no sessions are found, throw an error
+  if (!sessions || sessions.length === 0) {
+    throw new AppError(
+      HttpStatus.NOT_FOUND,
+      "No sessions found for this parent",
+    );
+  }
+
+  // Retrieve professionals and their subjects for each session
+  const allProfessionalData = sessions.flatMap((session) => {
+    if (!session.professional) return []; // Handle case where professionals is undefined
+
+    // Ensure professionals is an array even if it's a single ObjectId
+    const professionalsArray = Array.isArray(session.professional)
+      ? session.professional
+      : [session.professional];
+
+    return professionalsArray.map((professionalId) => ({
+      professionalId,
+      subject: session.subject, // Assuming 'subject' is directly in session
+    }));
+  });
+
+  // Remove duplicates (in case any professionals appear in multiple sessions)
+  const uniqueProfessionalData = Array.from(
+    new Map(
+      allProfessionalData.map((item) => [item.professionalId, item]),
+    ).values(),
+  );
+
+  // If no professionals are found, throw an error
+  if (uniqueProfessionalData.length === 0) {
+    throw new AppError(
+      HttpStatus.NOT_FOUND,
+      "No professionals assigned to these sessions",
+    );
+  }
+
+  // Find all professionals based on the unique professional IDs
+  const professionals = await ProfessionalModel.find({
+    _id: { $in: uniqueProfessionalData.map((item) => item.professionalId) },
+  })
+    .select("name profileImage subjects phoneNumber")
+    .populate({ path: "user", select: "email" });
+
+  // Inject the subject data into the professional information
+  professionals.forEach((professional) => {
+    // Find the corresponding subject(s) for this professional from the session data
+    const professionalSessionData = uniqueProfessionalData.filter(
+      (item) => item.professionalId.toString() === professional._id.toString(),
+    );
+
+    // Inject the subject(s) into the professional object
+    // Filter out undefined subjects to ensure it's only an array of strings
+    professional.subjects = professionalSessionData
+      .map((data) => data.subject)
+      .filter((subject) => subject !== undefined) as string[]; // Cast to string[] after filtering out undefined
+  });
+
+  // Return the list of professionals with injected subject data
+  return professionals;
+};
+
 export const adminServices = {
   getAllParents,
   getAllProfessionals,
@@ -248,4 +317,5 @@ export const adminServices = {
   setCodeForSession,
   getAllSessions,
   assignProfessionalAndSetCode,
+  getAllParentAssignedProfessionals,
 };

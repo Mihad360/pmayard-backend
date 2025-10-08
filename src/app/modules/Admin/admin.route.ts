@@ -4,6 +4,11 @@ import { adminControllers } from "./admin.controller";
 
 const router = express.Router();
 
+router.get(
+  "/parent-assigned-professionals/:parentId",
+  auth("admin"),
+  adminControllers.getAllParentAssignedProfessionals,
+);
 router.get("/parents", auth("admin"), adminControllers.getAllParents);
 router.get("/sessions", auth("admin"), adminControllers.getAllSessions);
 router.get(

@@ -49,6 +49,7 @@ const loginUser = async (payload: IAuth) => {
   }
 
   return {
+    _id: user._id,
     role: user.role,
     accessToken,
   };

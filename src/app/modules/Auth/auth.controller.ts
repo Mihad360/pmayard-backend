@@ -7,7 +7,7 @@ import { JwtPayload } from "../../interface/global";
 
 const loginUser = catchAsync(async (req, res) => {
   const result = await authServices.loginUser(req.body);
-  const { accessToken, role } = result;
+  const { accessToken, role, _id } = result;
 
   res.cookie("accessToken", accessToken, {
     httpOnly: true,
@@ -21,6 +21,7 @@ const loginUser = catchAsync(async (req, res) => {
     success: true,
     message: "Logged in successfully",
     data: {
+      _id,
       role,
       accessToken,
     },
