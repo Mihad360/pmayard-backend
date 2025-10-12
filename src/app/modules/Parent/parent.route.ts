@@ -6,7 +6,7 @@ import { upload } from "../../utils/sendImageToCloudinary";
 const router = express.Router();
 
 router.get(
-  "/assigned-professionals/:parentId",
+  "/assigned-professionals",
   auth("parent"),
   parentControllers.getAssignedProfessionals,
 );

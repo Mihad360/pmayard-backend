@@ -1,10 +1,11 @@
 import { Types } from "mongoose";
 
 export interface IMessage extends Document {
-  chat_id: Types.ObjectId;
+  conversation_id: Types.ObjectId;
   sender_id: Types.ObjectId;
+  attachment_id?: Types.ObjectId[] | string[];
   message_text: string;
-  timestamp: Date;
-  message_type: "text" | "image" | "video" | "file";
-  is_announcement: boolean;
+  last_msg: Types.ObjectId;
+  message_type: "text" | "attachments";
+  isDeleted: boolean;
 }

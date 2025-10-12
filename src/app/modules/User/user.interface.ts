@@ -1,12 +1,20 @@
 import { Model, Types } from "mongoose";
+import { IProfessional } from "../Professional/professional.interface";
+import { IParent } from "../Parent/parent.interface";
+
+// export interface IRole {
+//   _id: Types.ObjectId;
+//   name: string;
+//   profileImage: string;
+// }
 
 export interface IUser {
   _id?: Types.ObjectId;
-  roleId?: Types.ObjectId;
+  roleId?: IProfessional | IParent | Types.ObjectId; // roleId can either be populated (IRole) or an ObjectId reference
   email: string;
   password: string;
   role?: "professional" | "parent" | "admin";
-  roleRef?: "Professional" | "Parent";
+  roleRef?: "Professional" | "Parent" | "Admin";
   isActive?: boolean;
   otp?: string;
   expiresAt?: Date;
@@ -15,6 +23,10 @@ export interface IUser {
   passwordChangedAt?: Date;
   createdAt?: Date;
   updatedAt?: Date;
+}
+
+export interface IUserWithPopulatedRole extends IUser {
+  roleId: IProfessional | IParent; // roleId is populated, so it includes profileImage and name
 }
 
 export interface UserInterface extends Model<IUser> {

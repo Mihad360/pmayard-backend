@@ -11,9 +11,8 @@ import { ISession } from "../Session/session.interface";
 import { SessionModel } from "../Session/session.model";
 import dayjs from "dayjs";
 import QueryBuilder from "../../../builder/QueryBuilder";
-import { ChatModel } from "../Chat/chat.model";
-import { GroupMembership } from "../GroupMember/members.model";
-import { GroupModel } from "../ChatParticipant/group.model";
+import { ConversationModel } from "../Conversation/conversation.model";
+import { ConversationType } from "../Conversation/conversation.interface";
 
 const createProfessional = async (
   file: Express.Multer.File,
@@ -26,13 +25,13 @@ const createProfessional = async (
   try {
     session.startTransaction();
 
-    // Check if the user exists
+    // Step 1: Check if the user exists
     const isUserExist = await UserModel.findById(userId).populate("roleId");
     if (!isUserExist) {
       throw new AppError(HttpStatus.NOT_FOUND, "The user is not found");
     }
 
-    // Check if the professional already exists
+    // Step 2: Check if the professional already exists
     const isProfessionalExist = await ProfessionalModel.findById(
       isUserExist.roleId,
     );
@@ -43,12 +42,12 @@ const createProfessional = async (
       );
     }
 
-    // Check if the file is provided
+    // Step 3: Check if the file is provided
     if (!file) {
       throw new AppError(HttpStatus.NOT_FOUND, "The file is not found");
     }
 
-    // Upload the file to Cloudinary
+    // Step 4: Upload the file to Cloudinary
     const result = await sendFileToCloudinary(
       file.buffer,
       file.originalname,
@@ -58,69 +57,88 @@ const createProfessional = async (
       payload.profileImage = result?.secure_url;
       payload.user = isUserExist._id;
 
-      // Create the professional in the database
+      // Step 5: Create the professional in the database
       const createdProfessional = await ProfessionalModel.create([payload], {
         session,
       });
 
-      // Update the user with the professional role
+      // Step 6: Update the user with the professional role
       await UserModel.findByIdAndUpdate(
         isUserExist._id,
         { roleId: createdProfessional[0]._id, roleRef: "Professional" },
         { new: true, session },
       );
 
-      // Step 1: Check if Admin Group exists
-      let adminGroup = await GroupModel.findOne({ group_name: "Admin Group" });
-
-      if (!adminGroup) {
-        // Step 2: Create Admin Group if it doesn't exist
-        adminGroup = new GroupModel({
-          group_name: "Admin Group",
-          is_announcement_group: false, // Not an announcement-only group
-        });
-        await adminGroup.save({ session });
-      }
-
-      // Step 3: Add the Professional to the Admin Group
-      await GroupMembership.create(
-        [
-          {
-            user_id: createdProfessional[0].user, // Add the professional to the group
-            group_id: adminGroup._id,
-            role: "Member",
-          },
-        ],
-        { session },
-      );
-
-      // Step 4: Find Admin User (programmatically)
-      const adminUser = await UserModel.findOne({ role: "admin" }); // Assuming roleRef identifies admins
+      // Step 7: Find the Admin user (assuming roleRef identifies admins)
+      const adminUser = await UserModel.findOne({ roleRef: "Admin" });
       if (!adminUser) {
         throw new AppError(HttpStatus.NOT_FOUND, "Admin user not found");
       }
 
-      // Step 5: Create an individual chat between the Admin and the Professional
-      const chat = new ChatModel({
-        chatType: "individual",
-        users: [adminUser._id, createdProfessional[0].user], // Add both Admin and Professional as users
+      // Step 8: Create an individual conversation between Admin and Professional
+      const individualConversation = new ConversationModel({
+        type: ConversationType.INDIVIDUAL,
+        users: [adminUser._id, createdProfessional[0].user],
+        isDeleted: false,
       });
-      await chat.save({ session });
+
+      const savedIndividualConversation = await individualConversation.save({
+        session,
+      });
+
+      // Step 9: Check if the group conversation exists
+      let groupConversation = await ConversationModel.findOne({
+        type: ConversationType.GROUP,
+        conversationName: "Professionals Group",
+        users: { $in: [adminUser._id] }, // Admin should already be part of the group
+      });
+
+      if (!groupConversation) {
+        // Step 10: If no existing group conversation, create a new one with the Admin and the first professional
+        groupConversation = new ConversationModel({
+          type: ConversationType.GROUP,
+          conversationName: "Professionals Group",
+          users: [adminUser._id, createdProfessional[0].user], // Add Admin and the new Professional
+          isDeleted: false,
+        });
+        await groupConversation.save({ session });
+      } else {
+        // Step 11: If the group conversation exists, add the new professional to the group
+        if (createdProfessional[0].user) {
+          // Ensure the user exists
+          if (!groupConversation.users.includes(createdProfessional[0].user)) {
+            groupConversation.users.push(createdProfessional[0].user);
+            await groupConversation.save({ session });
+          }
+        } else {
+          throw new AppError(
+            HttpStatus.BAD_REQUEST,
+            "User ID for the created professional is not valid",
+          );
+        }
+      }
 
       // Commit the transaction after all steps
       await session.commitTransaction();
 
-      return createdProfessional[0];
+      // Return the created professional and conversation details
+      return {
+        createdProfessional: createdProfessional[0],
+        individualConversation: savedIndividualConversation,
+        groupConversation: groupConversation,
+      };
     }
 
     throw new AppError(HttpStatus.BAD_REQUEST, "File upload failed");
   } catch (error) {
+    // Abort the transaction if an error occurs
     await session.abortTransaction();
     throw new AppError(
       HttpStatus.BAD_REQUEST,
       error ? (error as any) : "An error occurred",
     );
   } finally {
+    // End the session
     await session.endSession();
   }
 };

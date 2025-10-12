@@ -42,7 +42,6 @@ const getEachParent = catchAsync(async (req, res) => {
 });
 
 const getAssignedProfessionals = catchAsync(async (req, res) => {
-  const id = req.params.parentId;
   const user = req.user as JwtPayload;
   const result = await parentServices.getAssignedProfessionals(user);
 

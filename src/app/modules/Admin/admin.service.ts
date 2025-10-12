@@ -14,6 +14,7 @@ import {
 import { ProfessionalModel } from "../Professional/professional.model";
 import { ISession } from "../Session/session.interface";
 import { SessionModel } from "../Session/session.model";
+import dayjs from "dayjs";
 
 const getAllParents = async (
   user: JwtPayload,
@@ -52,7 +53,7 @@ const getAllProfessionals = async (
     professional: isUserExist.roleId,
     status: "Completed",
   });
-  console.log(sessions);
+
   const professionalsQuery = new QueryBuilder(
     ProfessionalModel.find({ isDeleted: false }).populate({
       path: "user",
@@ -242,71 +243,103 @@ const assignProfessionalAndSetCode = async (
   return updatedSession;
 };
 
-const getAllParentAssignedProfessionals = async (id: string) => {
-  // Find all sessions associated with the parent
-  const sessions = await SessionModel.find({ parent: id });
+const getAllParentAssignedProfessionals = async (parentId: string) => {
+  // Find all sessions associated with the parent where the status is 'upcoming'
+  const sessions = await SessionModel.find({
+    parent: parentId,
+    status: "Upcoming",
+    isDeleted: false,
+  }).populate({
+    path: "professional", // Populate the 'professional' field in the session model
+    select: "name profileImage email phoneNumber user",
+    populate: { path: "user", select: "email" },
+  });
 
   // If no sessions are found, throw an error
   if (!sessions || sessions.length === 0) {
     throw new AppError(
       HttpStatus.NOT_FOUND,
-      "No sessions found for this parent",
+      "No upcoming sessions found for this parent",
     );
   }
 
-  // Retrieve professionals and their subjects for each session
-  const allProfessionalData = sessions.flatMap((session) => {
-    if (!session.professional) return []; // Handle case where professionals is undefined
+  // Retrieve professional-session data with their subject
+  const professionalSessionData = sessions.flatMap((session) => {
+    if (!session.professional) return []; // Handle case where professional is undefined
 
-    // Ensure professionals is an array even if it's a single ObjectId
-    const professionalsArray = Array.isArray(session.professional)
-      ? session.professional
-      : [session.professional];
-
-    return professionalsArray.map((professionalId) => ({
-      professionalId,
-      subject: session.subject, // Assuming 'subject' is directly in session
-    }));
+    // Return professional with their session data (each session creates a new entry with subject)
+    return session;
   });
-
-  // Remove duplicates (in case any professionals appear in multiple sessions)
-  const uniqueProfessionalData = Array.from(
-    new Map(
-      allProfessionalData.map((item) => [item.professionalId, item]),
-    ).values(),
-  );
 
   // If no professionals are found, throw an error
-  if (uniqueProfessionalData.length === 0) {
+  if (professionalSessionData.length === 0) {
     throw new AppError(
       HttpStatus.NOT_FOUND,
-      "No professionals assigned to these sessions",
+      "No professionals assigned to upcoming sessions",
     );
   }
 
-  // Find all professionals based on the unique professional IDs
-  const professionals = await ProfessionalModel.find({
-    _id: { $in: uniqueProfessionalData.map((item) => item.professionalId) },
-  })
-    .select("name profileImage subjects phoneNumber")
-    .populate({ path: "user", select: "email" });
+  // Return the detailed list with professional and session details including subject
+  return professionalSessionData;
+};
 
-  // Inject the subject data into the professional information
-  professionals.forEach((professional) => {
-    // Find the corresponding subject(s) for this professional from the session data
-    const professionalSessionData = uniqueProfessionalData.filter(
-      (item) => item.professionalId.toString() === professional._id.toString(),
+const removeSession = async (sessionId: string) => {
+  const isSessionExist = await SessionModel.findById(sessionId);
+  if (!isSessionExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "Session not found");
+  }
+
+  // If the session is confirmed, handle the slot status update
+  if (isSessionExist.status === "Confirmed") {
+    const professional = await ProfessionalModel.findById(
+      isSessionExist.professional,
     );
 
-    // Inject the subject(s) into the professional object
-    // Filter out undefined subjects to ensure it's only an array of strings
-    professional.subjects = professionalSessionData
-      .map((data) => data.subject)
-      .filter((subject) => subject !== undefined) as string[]; // Cast to string[] after filtering out undefined
-  });
+    if (!professional) {
+      throw new AppError(HttpStatus.NOT_FOUND, "Professional not found");
+    }
 
-  // Return the list of professionals with injected subject data
-  return professionals;
+    const day = dayjs(isSessionExist.date).format("dddd");
+    const availabilityForDay = professional.availability.find(
+      (avail) => avail.day === day,
+    );
+
+    if (!availabilityForDay) {
+      throw new AppError(
+        HttpStatus.NOT_FOUND,
+        "Professional is not available on this day",
+      );
+    }
+
+    const timeslotToUpdate = availabilityForDay.timeSlots.find(
+      (slot) =>
+        slot.startTime === isSessionExist?.time?.startTime &&
+        slot.endTime === isSessionExist?.time?.endTime &&
+        slot.status === "booked",
+    );
+
+    if (timeslotToUpdate) {
+      // Mark the timeslot as available before deletion
+      timeslotToUpdate.status = "available";
+      await professional.save();
+    } else {
+      throw new AppError(
+        HttpStatus.NOT_FOUND,
+        "Timeslot not found or already available",
+      );
+    }
+  }
+
+  // Mark the session as deleted
+  const result = await SessionModel.findByIdAndUpdate(
+    isSessionExist._id,
+    {
+      isDeleted: true,
+    },
+    { new: true },
+  );
+
+  return result;
 };
 
 export const adminServices = {
@@ -318,4 +351,5 @@ export const adminServices = {
   getAllSessions,
   assignProfessionalAndSetCode,
   getAllParentAssignedProfessionals,
+  removeSession,
 };

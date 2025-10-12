@@ -109,6 +109,18 @@ const getAllParentAssignedProfessionals = catchAsync(async (req, res) => {
   });
 });
 
+const removeSession = catchAsync(async (req, res) => {
+  const id = req.params.sessionId;
+  const result = await adminServices.removeSession(id);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "data retrieved successfully",
+    data: result,
+  });
+});
+
 export const adminControllers = {
   getAllParents,
   getAllProfessionals,
@@ -118,4 +130,5 @@ export const adminControllers = {
   getAllSessions,
   assignProfessionalAndSetCode,
   getAllParentAssignedProfessionals,
+  removeSession,
 };

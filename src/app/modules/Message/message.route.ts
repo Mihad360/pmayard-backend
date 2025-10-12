@@ -5,14 +5,14 @@ import { messageControllers } from "./message.controller";
 const router = express.Router();
 
 router.get(
-  "/:chatId",
-  auth("admin", "professional"),
-  messageControllers.getMyMessages,
+  "/:conversationId",
+  auth("admin", "professional", "parent"),
+  messageControllers.getAllMessage,
 );
 router.post(
-  "/:chatId",
-  auth("admin", "professional"),
-  messageControllers.sendMessage,
+  "/:conversationId/send-message",
+  auth("admin", "professional", "parent"),
+  messageControllers.sendMessageText,
 );
 
 export const MessageRoutes = router;

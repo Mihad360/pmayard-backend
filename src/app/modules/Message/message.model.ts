@@ -1,26 +1,32 @@
 import { model, Schema } from "mongoose";
+import { IMessage } from "./message.interface";
 
-const messageSchema = new Schema(
+const messageSchema = new Schema<IMessage>(
   {
-    chat_id: {
-      // Could reference a group or individual chat
+    conversation_id: {
       type: Schema.Types.ObjectId,
-      ref: "Chat",
+      ref: "Conversation",
     },
     sender_id: {
       type: Schema.Types.ObjectId,
       ref: "User",
     },
+    attachment_id: {
+      type: [Schema.Types.ObjectId],
+      ref: "Attachment",
+    },
     message_text: {
       type: String,
       required: true,
     },
-    is_announcement: {
-      type: Boolean,
-      default: false,
+    last_msg: {
+      type: Schema.Types.ObjectId,
+      ref: "Message",
     },
+    message_type: { type: String, enum: ["text", "attachments"] },
+    isDeleted: { type: Boolean, default: false },
   },
   { timestamps: true },
 );
 
-export const Message = model("Message", messageSchema);
+export const Message = model<IMessage>("Message", messageSchema);

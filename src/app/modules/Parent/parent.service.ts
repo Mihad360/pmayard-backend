@@ -9,9 +9,9 @@ import { sendFileToCloudinary } from "../../utils/sendImageToCloudinary";
 import { ParentModel } from "./parent.model";
 import { SessionModel } from "../Session/session.model";
 import QueryBuilder from "../../../builder/QueryBuilder";
-import { ChatModel } from "../Chat/chat.model";
-import { GroupMembership } from "../GroupMember/members.model";
-import { GroupModel } from "../ChatParticipant/group.model";
+import { ConversationModel } from "../Conversation/conversation.model";
+import { ConversationType } from "../Conversation/conversation.interface";
+import { ProfessionalModel } from "../Professional/professional.model";
 
 const createParent = async (
   file: Express.Multer.File,
@@ -24,24 +24,24 @@ const createParent = async (
   try {
     session.startTransaction();
 
-    // Check if the user exists
+    // Step 1: Check if the user exists
     const isUserExist = await UserModel.findById(userId).populate("roleId");
     if (!isUserExist) {
       throw new AppError(HttpStatus.NOT_FOUND, "The user is not found");
     }
 
-    // Check if the parent already exists
+    // Step 2: Check if the parent already exists
     const isParentExist = await ParentModel.findById(isUserExist.roleId);
     if (isParentExist) {
       throw new AppError(HttpStatus.BAD_REQUEST, "The parent already exists");
     }
 
-    // Check if file is provided
+    // Step 3: Check if the file is provided
     if (!file) {
       throw new AppError(HttpStatus.NOT_FOUND, "The file is not found");
     }
 
-    // Upload file to Cloudinary
+    // Step 4: Upload the file to Cloudinary
     const result = await sendFileToCloudinary(
       file.buffer,
       file.originalname,
@@ -51,69 +51,85 @@ const createParent = async (
       payload.profileImage = result?.secure_url;
       payload.user = isUserExist._id;
 
-      // Create Parent
+      // Step 5: Create the parent in the database
       const createdParent = await ParentModel.create([payload], { session });
 
-      // Update the user with the parent role
+      // Step 6: Update the user with the parent role
       await UserModel.findByIdAndUpdate(
         isUserExist._id,
         { roleId: createdParent[0]._id, roleRef: "Parent" },
         { new: true, session },
       );
 
-      // Step 1: Check if Parent Group exists
-      let parentGroup = await GroupModel.findOne({
-        group_name: "Parent Group",
-      });
-
-      if (!parentGroup) {
-        // Step 2: Create Parent Group if it doesn't exist
-        parentGroup = new GroupModel({
-          group_name: "Parent Group",
-          is_announcement_group: false, // Not an announcement-only group
-        });
-        await parentGroup.save({ session });
-      }
-
-      // Step 3: Add the Parent to the Parent Group
-      await GroupMembership.create(
-        [
-          {
-            user_id: createdParent[0].user, // Add the parent to the group
-            group_id: parentGroup._id,
-            role: "Member",
-          },
-        ],
-        { session },
-      );
-
-      // Step 4: Find Admin User (programmatically)
-      const adminUser = await UserModel.findOne({ roleRef: "Admin" }); // Assuming roleRef identifies admins
+      // Step 7: Find the Admin user (assuming roleRef identifies admins)
+      const adminUser = await UserModel.findOne({ roleRef: "Admin" });
       if (!adminUser) {
         throw new AppError(HttpStatus.NOT_FOUND, "Admin user not found");
       }
 
-      // Step 5: Create an individual chat between the Admin and the Parent
-      const chat = new ChatModel({
-        chatType: "individual",
-        users: [adminUser._id, createdParent[0].user], // Add both Admin and Parent as users
+      // Step 8: Create an individual conversation between Admin and Parent
+      const individualConversation = new ConversationModel({
+        type: ConversationType.INDIVIDUAL,
+        users: [adminUser._id, createdParent[0].user],
+        isDeleted: false,
       });
-      await chat.save({ session });
+
+      const savedIndividualConversation = await individualConversation.save({
+        session,
+      });
+
+      // Step 9: Check if the group conversation exists (Admin and all Parents)
+      let groupConversation = await ConversationModel.findOne({
+        type: ConversationType.GROUP,
+        conversationName: "Parents Group", // The group name
+        users: { $in: [adminUser._id] }, // Admin should already be part of the group
+      });
+
+      if (!groupConversation) {
+        // Step 10: If no existing group conversation, create a new one with the Admin and the first parent
+        groupConversation = new ConversationModel({
+          type: ConversationType.GROUP,
+          conversationName: "Parents Group", // Group name for all parents
+          users: [adminUser._id, createdParent[0].user], // Add Admin and the new Parent
+          isDeleted: false,
+        });
+        await groupConversation.save({ session });
+      } else {
+        // Step 11: If the group conversation exists, add the new parent to the group
+        if (createdParent[0].user) {
+          // Ensure the user exists
+          if (!groupConversation.users.includes(createdParent[0].user)) {
+            groupConversation.users.push(createdParent[0].user);
+            await groupConversation.save({ session });
+          }
+        } else {
+          throw new AppError(
+            HttpStatus.BAD_REQUEST,
+            "User ID for the created parent is not valid",
+          );
+        }
+      }
 
       // Commit the transaction after all steps
       await session.commitTransaction();
 
-      return createdParent[0];
+      return {
+        createdParent: createdParent[0],
+        individualConversation: savedIndividualConversation,
+        groupConversation: groupConversation,
+      };
     }
 
     throw new AppError(HttpStatus.BAD_REQUEST, "File upload failed");
   } catch (error) {
+    // Abort the transaction if an error occurs
     await session.abortTransaction();
     throw new AppError(
       HttpStatus.BAD_REQUEST,
       error ? (error as any) : "An error occurred",
     );
   } finally {
+    // End the session
     await session.endSession();
   }
 };
@@ -123,10 +139,14 @@ const verifySessionByCode = async (
   payload: { code: string },
 ) => {
   const userId = new Types.ObjectId(user.user);
+
+  // Step 1: Check if the Parent exists
   const isParentExist = await ParentModel.findOne({ user: userId });
   if (!isParentExist) {
     throw new AppError(HttpStatus.NOT_FOUND, "Parent not found");
   }
+
+  // Step 2: Check if the session exists with the provided code for the parent
   const isSessionExist = await SessionModel.findOne({
     code: payload.code,
     parent: isParentExist._id,
@@ -134,9 +154,21 @@ const verifySessionByCode = async (
   if (!isSessionExist) {
     throw new AppError(HttpStatus.NOT_FOUND, "Session not found");
   }
+
+  // Step 3: Check if the Professional linked to the session exists
+  const isProfessionalExist = await ProfessionalModel.findById(
+    isSessionExist.professional,
+  );
+  if (!isProfessionalExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "Professional not found");
+  }
+
+  // Step 4: Validate the session code
   if (payload.code && payload.code !== isSessionExist.code) {
     throw new AppError(HttpStatus.BAD_REQUEST, "Code is invalid");
   }
+
+  // Step 5: Update the session to mark it as verified
   const verifySession = await SessionModel.findByIdAndUpdate(
     isSessionExist._id,
     {
@@ -146,7 +178,22 @@ const verifySessionByCode = async (
       new: true,
     },
   );
-  return verifySession;
+
+  // Step 6: Create an individual conversation between the Parent and the Professional
+  const individualConversation = new ConversationModel({
+    type: ConversationType.INDIVIDUAL,
+    users: [isParentExist.user, isProfessionalExist.user], // Parent and Professional as users
+    isDeleted: false,
+  });
+
+  // Save the conversation
+  const savedConversation = await individualConversation.save();
+
+  // Return the updated session and conversation details
+  return {
+    verifySession,
+    individualConversation: savedConversation,
+  };
 };
 
 const getEachParent = async (id: string) => {

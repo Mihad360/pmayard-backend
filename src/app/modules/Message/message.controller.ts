@@ -4,11 +4,15 @@ import catchAsync from "../../utils/catchAsync";
 import sendResponse from "../../utils/sendResponse";
 import { messageServices } from "./message.service";
 
-const sendMessage = catchAsync(async (req, res) => {
-  const chatId = req.params.chatId;
+const sendMessageText = catchAsync(async (req, res) => {
+  const conversationId = req.params.conversationId;
   const user = req.user as JwtPayload;
   const userId = user.user as string;
-  const result = await messageServices.sendMessage(req.body, userId, chatId);
+  const result = await messageServices.sendMessageText(
+    conversationId,
+    userId,
+    req.body,
+  );
 
   sendResponse(res, {
     statusCode: HttpStatus.OK,
@@ -18,11 +22,10 @@ const sendMessage = catchAsync(async (req, res) => {
   });
 });
 
-const getMyMessages = catchAsync(async (req, res) => {
-  const chatId = req.params.chatId;
+const getAllMessage = catchAsync(async (req, res) => {
+  const conversationId = req.params.conversationId;
   const user = req.user as JwtPayload;
-  const userId = user.user as string;
-  const result = await messageServices.getMyMessages(userId, chatId);
+  const result = await messageServices.getAllMessage(conversationId, user);
 
   sendResponse(res, {
     statusCode: HttpStatus.OK,
@@ -33,6 +36,6 @@ const getMyMessages = catchAsync(async (req, res) => {
 });
 
 export const messageControllers = {
-  sendMessage,
-  getMyMessages,
+  sendMessageText,
+  getAllMessage,
 };

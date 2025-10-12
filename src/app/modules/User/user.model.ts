@@ -11,7 +11,7 @@ const userSchema = new Schema<IUser, UserInterface>(
     },
     roleRef: {
       type: String,
-      enum: ["Professional", "Parent"], // This is the key for the dynamic reference
+      enum: ["Professional", "Parent", "User"], // This is the key for the dynamic reference
     },
     email: {
       type: String,
