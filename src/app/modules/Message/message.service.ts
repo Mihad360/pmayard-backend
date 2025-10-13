@@ -1,20 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import HttpStatus from "http-status";
 import AppError from "../../erros/AppError";
-import { IMessage } from "./message.interface";
+import { IMessage, IMessageWithPopulatedRole } from "./message.interface";
 import { Message } from "./message.model";
 import mongoose, { Types } from "mongoose";
 import { ConversationModel } from "../Conversation/conversation.model";
 import { JwtPayload } from "../../interface/global";
 import { UserModel } from "../User/user.model";
-import { IUser, IUserWithPopulatedRole } from "../User/user.interface";
+import { IUserWithPopulatedRole } from "../User/user.interface";
+import { IConversationExtendsWithLastMsg } from "../Conversation/conversation.interface";
 
 const sendMessageText = async (
   conversationId: string,
-  user: string,
+  user: JwtPayload,
   payload: IMessage,
 ) => {
-  const userId = new Types.ObjectId(user); // Extract the user ID from the JWT token
+  const userId = new Types.ObjectId(user.user); // Extract the user ID from the JWT token
   const session = await mongoose.startSession();
 
   try {
@@ -37,6 +38,13 @@ const sendMessageText = async (
     payload.sender_id = userId;
     payload.conversation_id = new Types.ObjectId(conversationId);
     payload.message_type = "text";
+
+    if (conversation.type === "group" && user.role !== "admin") {
+      throw new AppError(
+        HttpStatus.BAD_REQUEST,
+        "Only admin can send messages to this conversation",
+      );
+    }
 
     // Create the message with session for transaction
     const result = await Message.create([payload], { session });
@@ -77,14 +85,123 @@ const getAllMessage = async (conversationId: string, user: JwtPayload) => {
     throw new AppError(HttpStatus.NOT_FOUND, "User not found");
   }
 
-  // Ensure the route works only for Professional or Parent roles
+  let modelToPopulate: string;
+  // Set the model to populate based on roleRef
+  if (isUserExist.roleRef === "Professional") {
+    modelToPopulate = "Professional";
+  } else if (isUserExist.roleRef === "Parent") {
+    modelToPopulate = "Parent";
+  } else {
+    modelToPopulate = "User"; // This case won't hit due to the earlier check
+  }
+
+  // Retrieve conversation and populate role information for all users in the conversation
+  const conversation = (await ConversationModel.findOne({
+    _id: new Types.ObjectId(conversationId),
+    type: "individual", // Ensure it's an individual conversation
+    users: { $in: [user.user] }, // Ensure the user is part of the conversation
+  })
+    .populate({
+      path: "users", // Populate the users field to include user details
+      select: "email roleId role", // Only select the necessary fields
+      populate: {
+        path: "roleId", // Populating roleId (Professional/Parent)
+        select: "name profileImage", // Select only name and profileImage from roleId
+        model: modelToPopulate, // Ensure roleId is populated based on role
+      },
+    })
+    .populate({
+      path: "lastMsg",
+      select: "message_text message_type sender_id",
+    })) as Partial<IConversationExtendsWithLastMsg>;
+
+  if (!conversation) {
+    throw new AppError(HttpStatus.NOT_FOUND, "The conversation not found");
+  }
+
+  // Ensure there are only two users in an individual conversation
+  if (conversation?.users?.length !== 2) {
+    throw new AppError(
+      HttpStatus.BAD_REQUEST,
+      "Invalid individual conversation",
+    );
+  }
+
+  // Find the opposite user (the one who is not the logged-in user)
+  const oppositeUser = (await UserModel.findOne({
+    $and: [
+      { _id: { $ne: isUserExist._id } }, // Exclude the logged-in user
+      { _id: { $in: conversation.users.map((user) => user._id) } }, // Ensure the user is part of the conversation
+    ],
+  }).populate({
+    path: "roleId",
+    select: "name profileImage",
+    model: modelToPopulate,
+  })) as Partial<IUserWithPopulatedRole>;
+  
+  if (!oppositeUser) {
+    throw new AppError(HttpStatus.NOT_FOUND, "Opposite user not found");
+  }
+
+  const senderId = conversation?.lastMsg?.sender_id;
+  const msgSender = await UserModel.findById(senderId);
+  if (!msgSender) {
+    throw new AppError(HttpStatus.NOT_FOUND, "Message sender not found");
+  }
+
+  const userRole =
+    msgSender.roleRef === "Professional"
+      ? "Professional"
+      : msgSender.roleRef === "Parent"
+        ? "Parent"
+        : "User";
+
+  // Retrieve all messages from the conversation
+  const messages = (await Message.find({
+    conversation_id: conversation._id,
+  }).populate({
+    path: "sender_id", // Populate the sender_id directly
+    select: "email roleId role", // Only select the necessary fields
+    populate: {
+      path: "roleId", // Populate roleId (Professional/Parent)
+      select: "name profileImage", // Select only name and profileImage from roleId
+      model: userRole,
+    },
+  })) as Partial<IMessageWithPopulatedRole>;
+
+  return {
+    data: {
+      oppositeUser: {
+        userId: oppositeUser._id,
+        email: oppositeUser.email,
+        role: oppositeUser.role,
+        userName: oppositeUser?.roleId?.name, // This should be populated now
+        userImage: oppositeUser.roleId?.profileImage, // This should be populated now
+      },
+      messages: messages, // Return the formatted messages with sender details
+    },
+  };
+};
+
+const getGroupMessagesForEveryone = async (
+  conversationId: string,
+  user: JwtPayload,
+) => {
+  // Ensure the user exists
+  const isUserExist = await UserModel.findById(user.user);
+  if (!isUserExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "User not found");
+  }
+
+  // Ensure the user is either Admin, Professional, or Parent
   if (
+    isUserExist.roleRef !== "Admin" &&
     isUserExist.roleRef !== "Professional" &&
     isUserExist.roleRef !== "Parent"
   ) {
     throw new AppError(
       HttpStatus.FORBIDDEN,
-      "Access denied for non-Professional/Parent users",
+      "Access denied for non-admin/professional/parent users",
     );
   }
 
@@ -99,105 +216,51 @@ const getAllMessage = async (conversationId: string, user: JwtPayload) => {
     modelToPopulate = "User"; // This case won't hit due to the earlier check
   }
 
-  // Retrieve conversation and populate role information
+  // Fetch the conversation based on the provided conversationId
   const conversation = await ConversationModel.findOne({
     _id: new Types.ObjectId(conversationId),
+    type: "group", // Ensure it's a group conversation
     users: { $in: [user.user] }, // Ensure the user is part of the conversation
-  }).populate({
-    path: "users", // Populate the users field to include user details
-    select: "email roleId role", // Only select the necessary fields
-    populate: {
-      path: "roleId", // Populating roleId (Professional/Parent)
-      select: "name profileImage", // Only select name and profileImage from roleId
-      model: modelToPopulate,
-    },
-  });
+  })
+    .populate({
+      path: "users", // Populate the users field to include user details
+      select: "email roleId role", // Select necessary fields
+      populate: {
+        path: "roleId", // Populate roleId (Professional/Parent)
+        select: "name profileImage", // Select only name and profileImage from roleId
+        model: modelToPopulate, // Ensure roleId is populated for Admins
+      },
+    })
+    .populate({ path: "lastMsg", select: "message_text message_type" });
 
   if (!conversation) {
-    throw new AppError(HttpStatus.NOT_FOUND, "The conversation not found");
+    throw new AppError(HttpStatus.NOT_FOUND, "Group conversation not found");
   }
 
-  // Filter out Admin users from the conversation
-  const filteredUsers = conversation.users.filter(
-    (user: Partial<IUser>) => user.role !== "admin",
-  );
+  // Fetch all messages for this specific conversation
+  const messages = await Message.find({ conversation_id: conversation._id });
 
-  let messages;
+  // Map through the messages and add sender info
+  const formattedMessages = messages.map((message) => {
+    const sender = conversation.users.find(
+      (user) => user._id.toString() === message.sender_id.toString(),
+    ) as Partial<IUserWithPopulatedRole>;
 
-  // For individual conversations, both users can send messages
-  if (conversation.type === "individual") {
-    // Fetch all messages where the sender is part of the conversation's users
-    messages = await Message.find({
-      conversation_id: conversation._id,
-      sender_id: {
-        $in: filteredUsers.map((user: Partial<IUser>) => user._id),
-      },
-    });
+    return {
+      ...message.toObject(),
+      senderRole: sender?.role, // Add sender role info
+      senderProfileImage: sender?.roleId?.profileImage,
+      senderName: sender?.roleId?.name, // Add sender name
+    } as any;
+  });
 
-    console.log("Messages fetched: ", messages); // Log the messages
-
-    // Format messages based on the role of the user
-    messages = messages.map((message) => {
-      // Find the sender in the users array
-      const sender = filteredUsers.find(
-        (user) => user._id.toString() === message.sender_id.toString(),
-      ) as Partial<IUserWithPopulatedRole>;
-
-      return {
-        ...message.toObject(),
-        senderRole: sender?.role, // Adding the role information for frontend
-        senderProfileImage: sender?.roleId?.profileImage || "",
-        senderName: sender?.roleId?.name, // Adding sender name
-      };
-    });
-  } else if (conversation.type === "group") {
-    // For group conversations, filter out Admin and only show messages from Professional/Parent
-    messages = await Message.find({
-      conversation_id: conversation._id,
-      sender_id: {
-        $in: filteredUsers.map((user: Partial<IUser>) => user._id),
-      },
-    });
-
-    console.log("Messages fetched: ", messages); // Log the messages
-
-    // Format messages with admin distinction
-    messages = messages.map((message) => {
-      // Find the sender in the users array
-      const sender = filteredUsers.find(
-        (user) => user._id.toString() === message.sender_id.toString(),
-      ) as Partial<IUserWithPopulatedRole>;
-
-      return {
-        ...message.toObject(),
-        senderRole: sender?.role, // Adding the role information for frontend
-        senderProfileImage: sender?.roleId?.profileImage || "",
-        senderName: sender?.roleId?.name, // Adding sender name
-      };
-    });
-  }
-
-  if (!messages || messages.length === 0) {
-    throw new AppError(HttpStatus.NOT_FOUND, "The messages not found");
-  }
-
-  // Now return the conversation and the formatted messages
   return {
     success: true,
-    message: "Data retrieved successfully",
+    message: "Group conversation and messages retrieved successfully",
     data: {
-      conversation: {
-        _id: conversation._id,
-        type: conversation.type,
-        users: filteredUsers.map((user: Partial<IUserWithPopulatedRole>) => ({
-          _id: user._id,
-          email: user.email,
-          role: user.role,
-          roleId: user.roleId, // Include role details
-          profileImage: user.roleId?.profileImage || "", // Include profile image if roleId exists
-        })),
-      },
-      messages, // Messages now have senderRole, senderProfileImage, and senderName for the frontend
+      conversationId: conversation._id,
+      groupName: conversation.conversationName,
+      messages: formattedMessages,
     },
   };
 };
@@ -205,4 +268,5 @@ const getAllMessage = async (conversationId: string, user: JwtPayload) => {
 export const messageServices = {
   sendMessageText,
   getAllMessage,
+  getGroupMessagesForEveryone,
 };

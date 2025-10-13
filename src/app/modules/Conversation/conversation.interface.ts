@@ -1,4 +1,5 @@
 import { Types } from "mongoose";
+import { IMessage } from "../Message/message.interface";
 
 // Enum to define the type of conversation
 export enum ConversationType {
@@ -12,6 +13,10 @@ export interface IConversation {
   conversationName?: string;
   type: ConversationType; // "individual" or "group"
   users: Types.ObjectId[]; // List of users involved in the conversation (for group conversations)
-  lastMsg?: Types.ObjectId; // Store the ID of the last message in the conversation
+  lastMsg?: IMessage | Types.ObjectId; // Store the ID of the last message in the conversation
   isDeleted: boolean;
+}
+
+export interface IConversationExtendsWithLastMsg extends IConversation {
+  lastMsg: IMessage;
 }

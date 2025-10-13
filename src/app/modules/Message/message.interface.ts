@@ -1,11 +1,20 @@
 import { Types } from "mongoose";
+import { IUser } from "../User/user.interface";
+import { IProfessional } from "../Professional/professional.interface";
+import { IParent } from "../Parent/parent.interface";
 
 export interface IMessage extends Document {
   conversation_id: Types.ObjectId;
-  sender_id: Types.ObjectId;
+  sender_id: IUser | Types.ObjectId;
   attachment_id?: Types.ObjectId[] | string[];
   message_text: string;
   last_msg: Types.ObjectId;
   message_type: "text" | "attachments";
   isDeleted: boolean;
+}
+
+export interface IMessageWithPopulatedRole extends IMessage {
+  sender_id: IUser & {
+    roleId: IProfessional | IParent; // The sender's roleId can be populated with either a Professional, Parent, or User
+  };
 }

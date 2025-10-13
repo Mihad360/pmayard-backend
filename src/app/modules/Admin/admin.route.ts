@@ -32,6 +32,10 @@ router.post(
   auth("admin"),
   adminControllers.assignProfessionalAndSetCode,
 );
-router.delete("/:sessionId", auth("admin"), adminControllers.removeSession);
+router.delete(
+  "/session/:sessionId",
+  auth("admin"),
+  adminControllers.removeSession,
+);
 
 export const AdminRoutes = router;
