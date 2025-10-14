@@ -19,7 +19,7 @@ const loginUser = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "Logged in successfully",
+    message: "User logged in successfully",
     data: {
       _id,
       role,
@@ -34,7 +34,7 @@ const forgetPassword = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "Password reset email sent successfully",
+    message: "Password reset OTP sent to email",
     data: result,
   });
 });
@@ -56,7 +56,7 @@ const resetPassword = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "Password reset successfully",
+    message: "Password reset successful",
     data: result,
   });
 });

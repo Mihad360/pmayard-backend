@@ -10,7 +10,7 @@ const registerUser = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "Registered successfully",
+    message: "User registered successfully",
     data: result,
   });
 });
@@ -22,7 +22,7 @@ const getMe = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved",
+    message: "User profile retrieved successfully",
     data: result,
   });
 });

@@ -24,7 +24,7 @@ const verifySessionByCode = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "Parent created successfully",
+    message: "Session verified successfully",
     data: result,
   });
 });
@@ -36,7 +36,7 @@ const getEachParent = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "Session confirmed successfully",
+    message: "Parent details retrieved successfully",
     data: result,
   });
 });
@@ -48,7 +48,7 @@ const getAssignedProfessionals = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "Session confirmed successfully",
+    message: "Assigned professionals retrieved successfully",
     data: result,
   });
 });
@@ -63,7 +63,7 @@ const getUpcomingProfessionalSessions = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "Session confirmed successfully",
+    message: "Upcoming professional sessions retrieved successfully",
     meta: result.meta,
     data: result.result,
   });

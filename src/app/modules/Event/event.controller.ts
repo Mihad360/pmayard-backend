@@ -9,7 +9,7 @@ const addEvent = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "Password reset email sent successfully",
+    message: "Event added successfully",
     data: result,
   });
 });
@@ -20,7 +20,7 @@ const getAllEvents = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "Password reset email sent successfully",
+    message: "Events retrieved successfully",
     data: result,
   });
 });

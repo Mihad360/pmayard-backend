@@ -13,6 +13,8 @@ import dayjs from "dayjs";
 import QueryBuilder from "../../../builder/QueryBuilder";
 import { ConversationModel } from "../Conversation/conversation.model";
 import { ConversationType } from "../Conversation/conversation.interface";
+import { INotification } from "../Notification/notification.interface";
+import { createAdminNotification } from "../Notification/notification.service";
 
 const createProfessional = async (
   file: Express.Multer.File,
@@ -61,6 +63,15 @@ const createProfessional = async (
       const createdProfessional = await ProfessionalModel.create([payload], {
         session,
       });
+
+      if (createdProfessional) {
+        const notInfo: INotification = {
+          sender: new Types.ObjectId(createdProfessional[0]?.user),
+          type: "user_join",
+          message: `A Tutor joined the app: (${createdProfessional[0]?.name})`,
+        };
+        await createAdminNotification(notInfo);
+      }
 
       // Step 6: Update the user with the professional role
       await UserModel.findByIdAndUpdate(

@@ -10,7 +10,7 @@ const addSubject = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
+    message: "Subject added successfully",
     data: result,
   });
 });
@@ -22,7 +22,7 @@ const getSubjects = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
+    message: "Subjects retrieved successfully",
     meta: result.meta,
     data: result.result,
   });

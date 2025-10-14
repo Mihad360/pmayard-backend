@@ -5,14 +5,9 @@ import { messageControllers } from "./message.controller";
 const router = express.Router();
 
 router.get(
-  "/group/:conversationId",
+  "/message/:conversationId",
   auth("admin", "professional", "parent"),
-  messageControllers.getGroupMessagesForEveryone,
-);
-router.get(
-  "/:conversationId",
-  auth("admin", "professional", "parent"),
-  messageControllers.getAllMessage,
+  messageControllers.getMessages,
 );
 router.post(
   "/:conversationId/send-message",

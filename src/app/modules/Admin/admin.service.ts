@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import HttpStatus from "http-status";
 import { Types } from "mongoose";
 import { JwtPayload } from "../../interface/global";
@@ -6,7 +7,6 @@ import AppError from "../../erros/AppError";
 import { ParentModel } from "../Parent/parent.model";
 import QueryBuilder from "../../../builder/QueryBuilder";
 import {
-  parentSearch,
   professionalSearch,
   sendAssignmentEmail,
   sessionSearch,
@@ -15,6 +15,8 @@ import { ProfessionalModel } from "../Professional/professional.model";
 import { ISession } from "../Session/session.interface";
 import { SessionModel } from "../Session/session.model";
 import dayjs from "dayjs";
+import { INotification } from "../Notification/notification.interface";
+import { createAdminNotification } from "../Notification/notification.service";
 
 const getAllParents = async (
   user: JwtPayload,
@@ -22,22 +24,142 @@ const getAllParents = async (
 ) => {
   const userId = new Types.ObjectId(user.user);
   const isUserExist = await UserModel.findById(userId);
-  if (!isUserExist) {
-    throw new AppError(HttpStatus.NOT_FOUND, "The user is not exist");
-  }
-  const parentsQuery = new QueryBuilder(
-    ParentModel.find({ isDeleted: false }),
-    query,
-  )
-    .search(parentSearch)
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
 
-  const meta = await parentsQuery.countTotal();
-  const result = await parentsQuery.modelQuery;
-  return { meta, result };
+  if (!isUserExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "The user does not exist");
+  }
+
+  const { searchTerm, page = 1, pageSize = 10 } = query;
+  const currentPage = Number(page) || 1;
+  const itemsPerPage = Number(pageSize) || 10;
+
+  // Create base pipeline with explicit typing
+  const aggregationPipeline: any[] = [
+    {
+      $match: { isDeleted: false },
+    },
+    // Lookup user to get email
+    {
+      $lookup: {
+        from: "users", // Assuming your User collection name
+        localField: "user", // The field in Parent that references User
+        foreignField: "_id", // The _id field in User collection
+        as: "userInfo",
+      },
+    },
+    {
+      $unwind: {
+        path: "$userInfo",
+        preserveNullAndEmptyArrays: true, // In case some parents don't have user reference
+      },
+    },
+  ];
+
+  // Add search stage if searchTerm exists (now including email from userInfo)
+  if (searchTerm) {
+    aggregationPipeline.push({
+      $match: {
+        $or: [
+          { name: { $regex: searchTerm, $options: "i" } },
+          { childs_name: { $regex: searchTerm, $options: "i" } },
+          { childs_grade: { $regex: searchTerm, $options: "i" } },
+          { "userInfo.email": { $regex: searchTerm, $options: "i" } }, // Search in email from user
+        ],
+      },
+    });
+  }
+
+  // Add session lookup and other stages
+  aggregationPipeline.push(
+    {
+      $lookup: {
+        from: "sessions",
+        localField: "_id",
+        foreignField: "parent",
+        as: "sessions",
+      },
+    },
+    {
+      $project: {
+        email: "$userInfo.email", // Get email from userInfo
+        name: 1,
+        childs_name: 1,
+        childs_grade: 1,
+        phoneNumber: 1,
+        profileImage: 1,
+        bookedSessions: {
+          $size: {
+            $filter: {
+              input: "$sessions",
+              as: "session",
+              cond: { $eq: ["$$session.status", "Upcoming"] },
+            },
+          },
+        },
+      },
+    },
+    {
+      $sort: { bookedSessions: -1 },
+    },
+    {
+      $skip: (currentPage - 1) * itemsPerPage,
+    },
+    {
+      $limit: itemsPerPage,
+    },
+  );
+
+  const result = await ParentModel.aggregate(aggregationPipeline);
+
+  // Count pipeline - needs to match the same filtering logic
+  const countPipeline: any[] = [
+    {
+      $match: { isDeleted: false },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "user",
+        foreignField: "_id",
+        as: "userInfo",
+      },
+    },
+    {
+      $unwind: {
+        path: "$userInfo",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+  ];
+
+  if (searchTerm) {
+    countPipeline.push({
+      $match: {
+        $or: [
+          { name: { $regex: searchTerm, $options: "i" } },
+          { childs_name: { $regex: searchTerm, $options: "i" } },
+          { childs_grade: { $regex: searchTerm, $options: "i" } },
+          { "userInfo.email": { $regex: searchTerm, $options: "i" } },
+        ],
+      },
+    });
+  }
+
+  countPipeline.push({
+    $count: "total",
+  });
+
+  const total = await ParentModel.aggregate(countPipeline);
+
+  return {
+    meta: {
+      total: total[0]?.total || 0,
+      page: currentPage,
+      pageSize: itemsPerPage,
+      totalPages: Math.ceil((total[0]?.total || 0) / itemsPerPage),
+    },
+    result,
+  };
 };
 
 const getAllProfessionals = async (
@@ -190,7 +312,9 @@ const assignProfessionalAndSetCode = async (
   parentId: string,
   professionalId: string,
   payload: ISession,
+  userId: string,
 ) => {
+  const senderId = new Types.ObjectId(userId);
   const isParentExist = await ParentModel.findById(parentId);
   if (!isParentExist) {
     throw new AppError(HttpStatus.NOT_FOUND, "Parent not found");
@@ -238,6 +362,22 @@ const assignProfessionalAndSetCode = async (
       updatedSession.parent,
       updatedSession.code,
     );
+
+    const notInfo: INotification = {
+      sender: senderId,
+      recipient: updatedSession.parent,
+      type: "tutor_assigned",
+      message: `A new Tutor assigned to you: (${isProfessionalExist.name})`,
+    };
+    await createAdminNotification(notInfo);
+
+    const notInfos: INotification = {
+      sender: senderId,
+      recipient: updatedSession.professional,
+      type: "parent_assigned",
+      message: `A new Parent assigned to you: (${isParentExist.name})`,
+    };
+    await createAdminNotification(notInfos);
   }
 
   return updatedSession;
@@ -342,6 +482,63 @@ const removeSession = async (sessionId: string) => {
   return result;
 };
 
+const getDashboardData = async (year?: number, month?: number) => {
+  try {
+    // Build the match criteria based on the year and month provided
+    const matchCriteria: any = { isDeleted: false };
+
+    if (year) {
+      matchCriteria["date"] = {
+        $gte: new Date(`${year}-01-01`),
+        $lt: new Date(`${year + 1}-01-01`),
+      }; // Filter by year
+    }
+
+    if (month) {
+      matchCriteria["date"] = {
+        ...matchCriteria["date"],
+        $gte: new Date(`${year}-${month < 10 ? "0" + month : month}-01`),
+        $lt: new Date(`${year}-${month < 10 ? "0" + month : month}-31`),
+      }; // Filter by month
+    }
+
+    // Fetch the monthly session data
+    const monthlySessions = await SessionModel.aggregate([
+      { $match: matchCriteria },
+      {
+        $project: {
+          month: { $month: "$date" },
+          year: { $year: "$date" },
+        },
+      },
+      {
+        $group: {
+          _id: { year: "$year", month: "$month" },
+          totalSessions: { $sum: 1 },
+        },
+      },
+      { $sort: { "_id.year": 1, "_id.month": 1 } },
+    ]);
+
+    // Get card data: total sessions, total parents, total tutors
+    const totalSessions = await SessionModel.countDocuments({
+      isDeleted: false,
+    });
+    const totalParents = await ParentModel.countDocuments({});
+    const totalTutors = await ProfessionalModel.countDocuments({});
+
+    return {
+      monthlySessions,
+      totalSessions,
+      totalParents,
+      totalTutors,
+    };
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (error) {
+    throw new Error("Error fetching dashboard data");
+  }
+};
+
 export const adminServices = {
   getAllParents,
   getAllProfessionals,
@@ -352,4 +549,5 @@ export const adminServices = {
   assignProfessionalAndSetCode,
   getAllParentAssignedProfessionals,
   removeSession,
+  getDashboardData,
 };

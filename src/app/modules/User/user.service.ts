@@ -6,6 +6,8 @@ import { JwtPayload } from "../../interface/global";
 import { createToken } from "../../utils/jwt";
 import config from "../../config";
 import { Types } from "mongoose";
+import { INotification } from "../Notification/notification.interface";
+import { createAdminNotification } from "../Notification/notification.service";
 
 const registerUser = async (payload: IUser) => {
   const isUserExist = await UserModel.findOne({ email: payload.email });
@@ -29,15 +31,31 @@ const registerUser = async (payload: IUser) => {
       config.jwt_access_expires_in as string,
     );
 
-    if (accessToken && !result.isVerified) {
+    const refreshToken = createToken(
+      jwtPayload,
+      config.jwt_refresh_secret as string,
+      config.jwt_refresh_expires_in as string,
+    );
+
+    if (accessToken && refreshToken && !result.isVerified) {
       await UserModel.findByIdAndUpdate(result._id, {
         isVerified: true,
       });
     }
 
+    if (accessToken && refreshToken && !result.isVerified) {
+      const notInfo: INotification = {
+        sender: new Types.ObjectId(result._id),
+        type: "user_registration",
+        message: `User Registered: (${result.email})`,
+      };
+      await createAdminNotification(notInfo);
+    }
+
     return {
       role: result.role,
       accessToken,
+      refreshToken,
     };
   }
 };

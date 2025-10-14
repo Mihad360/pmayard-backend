@@ -11,7 +11,7 @@ const getMySessions = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "session retrieved successfully",
+    message: "Sessions retrieved successfully",
     data: result,
   });
 });
@@ -23,7 +23,7 @@ const updateSessionStatus = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "session retrieved successfully",
+    message: "Session status updated successfully",
     data: result,
   });
 });
@@ -35,7 +35,7 @@ const getEachSession = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "Session confirmed successfully",
+    message: "Session details retrieved successfully",
     data: result,
   });
 });

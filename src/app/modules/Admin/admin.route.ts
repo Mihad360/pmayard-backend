@@ -9,6 +9,7 @@ router.get(
   auth("admin"),
   adminControllers.getAllParentAssignedProfessionals,
 );
+router.get("/session-stats", auth("admin"), adminControllers.getDashboardData);
 router.get("/parents", auth("admin"), adminControllers.getAllParents);
 router.get("/sessions", auth("admin"), adminControllers.getAllSessions);
 router.get(

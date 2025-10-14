@@ -16,7 +16,7 @@ const createProfessional = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "OTP verified successfully",
+    message: "Professional created successfully",
     data: result,
   });
 });
@@ -40,7 +40,7 @@ const getAssignedParents = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "Session confirmed successfully",
+    message: "Assigned parents retrieved successfully",
     data: result,
   });
 });
@@ -52,7 +52,7 @@ const getEachProfessional = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "Session confirmed successfully",
+    message: "Professional details retrieved successfully",
     data: result,
   });
 });
@@ -67,7 +67,7 @@ const getUpcomingParentSessions = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "Session confirmed successfully",
+    message: "Upcoming parent sessions retrieved successfully",
     meta: result.meta,
     data: result.result,
   });

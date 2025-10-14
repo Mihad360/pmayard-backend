@@ -11,9 +11,8 @@ const getAllParents = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
-    meta: result.meta,
-    data: result.result,
+    message: "Parents retrieved successfully",
+    data: result,
   });
 });
 
@@ -24,7 +23,7 @@ const getAllProfessionals = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
+    message: "Professionals retrieved successfully",
     meta: result.meta,
     sessions: result.sessions,
     data: result.result,
@@ -38,7 +37,7 @@ const getAllSessions = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
+    message: "Sessions retrieved successfully",
     meta: result.meta,
     data: result.result,
   });
@@ -51,7 +50,7 @@ const getEachParent = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
+    message: "Parent details retrieved successfully",
     data: result,
   });
 });
@@ -63,7 +62,7 @@ const assignProfessional = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
+    message: "Professional assigned successfully",
     data: result,
   });
 });
@@ -75,7 +74,7 @@ const setCodeForSession = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
+    message: "Session code set successfully",
     data: result,
   });
 });
@@ -83,16 +82,18 @@ const setCodeForSession = catchAsync(async (req, res) => {
 const assignProfessionalAndSetCode = catchAsync(async (req, res) => {
   const id1 = req.params.parentId;
   const id2 = req.params.professionalId;
+  const user = req.user as JwtPayload;
   const result = await adminServices.assignProfessionalAndSetCode(
     id1,
     id2,
     req.body,
+    user.user as string,
   );
 
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
+    message: "Professional assigned and session code set successfully",
     data: result,
   });
 });
@@ -104,7 +105,7 @@ const getAllParentAssignedProfessionals = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
+    message: "Parent's assigned professionals retrieved successfully",
     data: result,
   });
 });
@@ -116,7 +117,18 @@ const removeSession = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
+    message: "Session removed successfully",
+    data: result,
+  });
+});
+
+const getDashboardData = catchAsync(async (req, res) => {
+  const result = await adminServices.getDashboardData();
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "Dashboard data retrieved successfully",
     data: result,
   });
 });
@@ -131,4 +143,5 @@ export const adminControllers = {
   assignProfessionalAndSetCode,
   getAllParentAssignedProfessionals,
   removeSession,
+  getDashboardData,
 };

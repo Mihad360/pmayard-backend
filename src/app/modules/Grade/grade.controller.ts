@@ -9,7 +9,7 @@ const addGrade = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
+    message: "Grade added successfully",
     data: result,
   });
 });
@@ -20,7 +20,7 @@ const getGrades = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
+    message: "Grades retrieved successfully",
     meta: result.meta,
     data: result.result,
   });

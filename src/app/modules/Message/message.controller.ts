@@ -16,42 +16,25 @@ const sendMessageText = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
+    message: "Message sent successfully",
     data: result,
   });
 });
 
-const getAllMessage = catchAsync(async (req, res) => {
+const getMessages = catchAsync(async (req, res) => {
   const conversationId = req.params.conversationId;
   const user = req.user as JwtPayload;
-  const result = await messageServices.getAllMessage(conversationId, user);
+  const result = await messageServices.getMessages(conversationId, user);
 
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
-    data: result,
-  });
-});
-
-const getGroupMessagesForEveryone = catchAsync(async (req, res) => {
-  const conversationId = req.params.conversationId;
-  const user = req.user as JwtPayload;
-  const result = await messageServices.getGroupMessagesForEveryone(
-    conversationId,
-    user,
-  );
-
-  sendResponse(res, {
-    statusCode: HttpStatus.OK,
-    success: true,
-    message: "data retrieved successfully",
+    message: "Messages retrieved successfully",
     data: result,
   });
 });
 
 export const messageControllers = {
   sendMessageText,
-  getAllMessage,
-  getGroupMessagesForEveryone,
+  getMessages,
 };

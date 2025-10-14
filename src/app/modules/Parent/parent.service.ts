@@ -12,6 +12,8 @@ import QueryBuilder from "../../../builder/QueryBuilder";
 import { ConversationModel } from "../Conversation/conversation.model";
 import { ConversationType } from "../Conversation/conversation.interface";
 import { ProfessionalModel } from "../Professional/professional.model";
+import { INotification } from "../Notification/notification.interface";
+import { createAdminNotification } from "../Notification/notification.service";
 
 const createParent = async (
   file: Express.Multer.File,
@@ -53,6 +55,15 @@ const createParent = async (
 
       // Step 5: Create the parent in the database
       const createdParent = await ParentModel.create([payload], { session });
+
+      if (createdParent) {
+        const notInfo: INotification = {
+          sender: new Types.ObjectId(createdParent[0]?.user),
+          type: "user_join",
+          message: `A Parent joined the app: (${createdParent[0]?.name})`,
+        };
+        await createAdminNotification(notInfo);
+      }
 
       // Step 6: Update the user with the parent role
       await UserModel.findByIdAndUpdate(

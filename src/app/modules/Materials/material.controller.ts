@@ -11,7 +11,7 @@ const addMaterial = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
+    message: "Material added successfully",
     data: result,
   });
 });
@@ -23,7 +23,7 @@ const getMaterials = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "data retrieved successfully",
+    message: "Materials retrieved successfully",
     meta: result.meta,
     data: result.result,
   });

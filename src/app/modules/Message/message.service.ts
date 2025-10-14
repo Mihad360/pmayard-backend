@@ -1,14 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import HttpStatus from "http-status";
 import AppError from "../../erros/AppError";
-import { IMessage, IMessageWithPopulatedRole } from "./message.interface";
+import { IMessage } from "./message.interface";
 import { Message } from "./message.model";
 import mongoose, { Types } from "mongoose";
 import { ConversationModel } from "../Conversation/conversation.model";
 import { JwtPayload } from "../../interface/global";
 import { UserModel } from "../User/user.model";
 import { IUserWithPopulatedRole } from "../User/user.interface";
-import { IConversationExtendsWithLastMsg } from "../Conversation/conversation.interface";
 
 const sendMessageText = async (
   conversationId: string,
@@ -79,194 +78,218 @@ const sendMessageText = async (
   }
 };
 
-const getAllMessage = async (conversationId: string, user: JwtPayload) => {
-  const isUserExist = await UserModel.findById(user.user);
-  if (!isUserExist) {
-    throw new AppError(HttpStatus.NOT_FOUND, "User not found");
+const getMessages = async (conversationId: string, user: JwtPayload) => {
+  // Start a Mongoose session for the transaction
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // Ensure the user exists
+    const isUserExist = await UserModel.findById(user.user).session(session);
+    if (!isUserExist) {
+      throw new AppError(HttpStatus.NOT_FOUND, "User not found");
+    }
+
+    // Ensure the user is either Admin, Professional, or Parent
+    if (
+      isUserExist.roleRef !== "Admin" &&
+      isUserExist.roleRef !== "Professional" &&
+      isUserExist.roleRef !== "Parent"
+    ) {
+      throw new AppError(
+        HttpStatus.FORBIDDEN,
+        "Access denied for non-admin/professional/parent users",
+      );
+    }
+
+    // Retrieve the conversation first to determine its type
+    const conversation = await ConversationModel.findOne({
+      _id: new Types.ObjectId(conversationId),
+      users: { $in: [user.user] }, // Ensure the user is part of the conversation
+    }).session(session);
+
+    if (!conversation) {
+      throw new AppError(HttpStatus.NOT_FOUND, "Conversation not found");
+    }
+
+    let result;
+
+    if (conversation.type === "individual") {
+      // If it's an individual conversation, call the logic for individual
+      let modelToPopulate: string;
+      if (isUserExist.roleRef === "Professional") {
+        modelToPopulate = "Professional";
+      } else if (isUserExist.roleRef === "Parent") {
+        modelToPopulate = "Parent";
+      } else {
+        modelToPopulate = "User";
+      }
+
+      // Populate the conversation and last message
+      const populatedConversation = await ConversationModel.findOne({
+        _id: new Types.ObjectId(conversationId),
+        type: "individual",
+        users: { $in: [user.user] },
+      })
+        .populate({
+          path: "users",
+          select: "email roleId role",
+          populate: {
+            path: "roleId",
+            select: "name profileImage",
+            model: modelToPopulate,
+          },
+        })
+        .populate({
+          path: "lastMsg",
+          select: "message_text message_type sender_id",
+        })
+        .session(session);
+
+      if (!populatedConversation || populatedConversation.users.length !== 2) {
+        throw new AppError(
+          HttpStatus.BAD_REQUEST,
+          "Invalid individual conversation",
+        );
+      }
+
+      const oppositeUserId = await UserModel.findOne({
+        $and: [
+          { _id: { $ne: isUserExist._id } }, // Exclude the logged-in user
+          { _id: { $in: conversation.users.map((user) => user._id) } }, // Ensure the user is part of the conversation
+        ],
+      }).session(session);
+
+      if (!oppositeUserId) {
+        throw new AppError(HttpStatus.NOT_FOUND, "Opposite user not found");
+      }
+
+      const oppositeUser = (await UserModel.findOne({
+        $and: [
+          { _id: { $ne: isUserExist._id } }, // Exclude the logged-in user
+          { _id: { $in: conversation.users.map((user) => user._id) } }, // Ensure the user is part of the conversation
+        ],
+      })
+        .populate({
+          path: "roleId",
+          select: "name profileImage",
+          model:
+            oppositeUserId.roleRef === "Professional"
+              ? "Professional"
+              : oppositeUserId.roleRef === "Parent"
+                ? "Parent"
+                : "User",
+        })
+        .session(session)) as Partial<IUserWithPopulatedRole>;
+
+      if (!oppositeUser) {
+        throw new AppError(HttpStatus.NOT_FOUND, "Opposite user not found");
+      }
+
+      // Retrieve all messages for the conversation
+      const messages = await Message.find({
+        conversation_id: populatedConversation._id,
+      })
+        .populate({
+          path: "sender_id",
+          select: "email roleId role",
+          populate: {
+            path: "roleId",
+            select: "name profileImage",
+            model:
+              oppositeUser.roleRef === "Professional"
+                ? "Professional"
+                : oppositeUser.roleRef === "Parent"
+                  ? "Parent"
+                  : "User",
+          },
+        })
+        .session(session);
+
+      result = {
+        oppositeUser: {
+          userId: oppositeUser._id,
+          email: oppositeUser.email,
+          role: oppositeUser.role,
+          userName: oppositeUser?.roleId?.name,
+          userImage: oppositeUser.roleId?.profileImage,
+        },
+        messages: messages,
+      };
+    } else if (conversation.type === "group") {
+      // If it's a group conversation, call the group logic
+      let modelToPopulate: string;
+      if (isUserExist.roleRef === "Professional") {
+        modelToPopulate = "Professional";
+      } else if (isUserExist.roleRef === "Parent") {
+        modelToPopulate = "Parent";
+      } else {
+        modelToPopulate = "User";
+      }
+
+      const populatedGroupConversation = await ConversationModel.findOne({
+        _id: new Types.ObjectId(conversationId),
+        type: "group",
+        users: { $in: [user.user] },
+      })
+        .populate({
+          path: "users",
+          select: "email roleId role",
+          populate: {
+            path: "roleId",
+            select: "name profileImage",
+            model: modelToPopulate,
+          },
+        })
+        .populate({ path: "lastMsg", select: "message_text message_type" })
+        .session(session);
+
+      if (!populatedGroupConversation) {
+        throw new AppError(
+          HttpStatus.NOT_FOUND,
+          "Group conversation not found",
+        );
+      }
+
+      const messages = await Message.find({
+        conversation_id: populatedGroupConversation._id,
+      }).session(session);
+
+      // Format the messages
+      const formattedMessages = messages.map((message) => {
+        const sender = populatedGroupConversation.users.find(
+          (user) => user._id.toString() === message.sender_id.toString(),
+        ) as Partial<IUserWithPopulatedRole>;
+
+        return {
+          ...message.toObject(),
+          senderRole: sender?.role,
+          senderProfileImage: sender?.roleId?.profileImage || null,
+          senderName: sender?.roleId?.name,
+        } as any;
+      });
+
+      result = {
+        conversationId: populatedGroupConversation._id,
+        groupName: populatedGroupConversation.conversationName,
+        messages: formattedMessages,
+      };
+    }
+
+    // Commit the transaction
+    await session.commitTransaction();
+    return { data: result };
+  } catch (error) {
+    // If there's any error, abort the transaction
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    // End the session
+    session.endSession();
   }
-
-  let modelToPopulate: string;
-  // Set the model to populate based on roleRef
-  if (isUserExist.roleRef === "Professional") {
-    modelToPopulate = "Professional";
-  } else if (isUserExist.roleRef === "Parent") {
-    modelToPopulate = "Parent";
-  } else {
-    modelToPopulate = "User"; // This case won't hit due to the earlier check
-  }
-
-  // Retrieve conversation and populate role information for all users in the conversation
-  const conversation = (await ConversationModel.findOne({
-    _id: new Types.ObjectId(conversationId),
-    type: "individual", // Ensure it's an individual conversation
-    users: { $in: [user.user] }, // Ensure the user is part of the conversation
-  })
-    .populate({
-      path: "users", // Populate the users field to include user details
-      select: "email roleId role", // Only select the necessary fields
-      populate: {
-        path: "roleId", // Populating roleId (Professional/Parent)
-        select: "name profileImage", // Select only name and profileImage from roleId
-        model: modelToPopulate, // Ensure roleId is populated based on role
-      },
-    })
-    .populate({
-      path: "lastMsg",
-      select: "message_text message_type sender_id",
-    })) as Partial<IConversationExtendsWithLastMsg>;
-
-  if (!conversation) {
-    throw new AppError(HttpStatus.NOT_FOUND, "The conversation not found");
-  }
-
-  // Ensure there are only two users in an individual conversation
-  if (conversation?.users?.length !== 2) {
-    throw new AppError(
-      HttpStatus.BAD_REQUEST,
-      "Invalid individual conversation",
-    );
-  }
-
-  // Find the opposite user (the one who is not the logged-in user)
-  const oppositeUser = (await UserModel.findOne({
-    $and: [
-      { _id: { $ne: isUserExist._id } }, // Exclude the logged-in user
-      { _id: { $in: conversation.users.map((user) => user._id) } }, // Ensure the user is part of the conversation
-    ],
-  }).populate({
-    path: "roleId",
-    select: "name profileImage",
-    model: modelToPopulate,
-  })) as Partial<IUserWithPopulatedRole>;
-  
-  if (!oppositeUser) {
-    throw new AppError(HttpStatus.NOT_FOUND, "Opposite user not found");
-  }
-
-  const senderId = conversation?.lastMsg?.sender_id;
-  const msgSender = await UserModel.findById(senderId);
-  if (!msgSender) {
-    throw new AppError(HttpStatus.NOT_FOUND, "Message sender not found");
-  }
-
-  const userRole =
-    msgSender.roleRef === "Professional"
-      ? "Professional"
-      : msgSender.roleRef === "Parent"
-        ? "Parent"
-        : "User";
-
-  // Retrieve all messages from the conversation
-  const messages = (await Message.find({
-    conversation_id: conversation._id,
-  }).populate({
-    path: "sender_id", // Populate the sender_id directly
-    select: "email roleId role", // Only select the necessary fields
-    populate: {
-      path: "roleId", // Populate roleId (Professional/Parent)
-      select: "name profileImage", // Select only name and profileImage from roleId
-      model: userRole,
-    },
-  })) as Partial<IMessageWithPopulatedRole>;
-
-  return {
-    data: {
-      oppositeUser: {
-        userId: oppositeUser._id,
-        email: oppositeUser.email,
-        role: oppositeUser.role,
-        userName: oppositeUser?.roleId?.name, // This should be populated now
-        userImage: oppositeUser.roleId?.profileImage, // This should be populated now
-      },
-      messages: messages, // Return the formatted messages with sender details
-    },
-  };
-};
-
-const getGroupMessagesForEveryone = async (
-  conversationId: string,
-  user: JwtPayload,
-) => {
-  // Ensure the user exists
-  const isUserExist = await UserModel.findById(user.user);
-  if (!isUserExist) {
-    throw new AppError(HttpStatus.NOT_FOUND, "User not found");
-  }
-
-  // Ensure the user is either Admin, Professional, or Parent
-  if (
-    isUserExist.roleRef !== "Admin" &&
-    isUserExist.roleRef !== "Professional" &&
-    isUserExist.roleRef !== "Parent"
-  ) {
-    throw new AppError(
-      HttpStatus.FORBIDDEN,
-      "Access denied for non-admin/professional/parent users",
-    );
-  }
-
-  let modelToPopulate: string;
-
-  // Set the model to populate based on roleRef
-  if (isUserExist.roleRef === "Professional") {
-    modelToPopulate = "Professional";
-  } else if (isUserExist.roleRef === "Parent") {
-    modelToPopulate = "Parent";
-  } else {
-    modelToPopulate = "User"; // This case won't hit due to the earlier check
-  }
-
-  // Fetch the conversation based on the provided conversationId
-  const conversation = await ConversationModel.findOne({
-    _id: new Types.ObjectId(conversationId),
-    type: "group", // Ensure it's a group conversation
-    users: { $in: [user.user] }, // Ensure the user is part of the conversation
-  })
-    .populate({
-      path: "users", // Populate the users field to include user details
-      select: "email roleId role", // Select necessary fields
-      populate: {
-        path: "roleId", // Populate roleId (Professional/Parent)
-        select: "name profileImage", // Select only name and profileImage from roleId
-        model: modelToPopulate, // Ensure roleId is populated for Admins
-      },
-    })
-    .populate({ path: "lastMsg", select: "message_text message_type" });
-
-  if (!conversation) {
-    throw new AppError(HttpStatus.NOT_FOUND, "Group conversation not found");
-  }
-
-  // Fetch all messages for this specific conversation
-  const messages = await Message.find({ conversation_id: conversation._id });
-
-  // Map through the messages and add sender info
-  const formattedMessages = messages.map((message) => {
-    const sender = conversation.users.find(
-      (user) => user._id.toString() === message.sender_id.toString(),
-    ) as Partial<IUserWithPopulatedRole>;
-
-    return {
-      ...message.toObject(),
-      senderRole: sender?.role, // Add sender role info
-      senderProfileImage: sender?.roleId?.profileImage,
-      senderName: sender?.roleId?.name, // Add sender name
-    } as any;
-  });
-
-  return {
-    success: true,
-    message: "Group conversation and messages retrieved successfully",
-    data: {
-      conversationId: conversation._id,
-      groupName: conversation.conversationName,
-      messages: formattedMessages,
-    },
-  };
 };
 
 export const messageServices = {
   sendMessageText,
-  getAllMessage,
-  getGroupMessagesForEveryone,
+  getMessages,
 };
