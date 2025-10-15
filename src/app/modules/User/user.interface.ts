@@ -25,6 +25,13 @@ export interface IUser {
   updatedAt?: Date;
 }
 
+export interface IEditUserProfilePayload {
+  email?: string; // Optional email to be updated (only for admin)
+  profileImage?: string; // Profile image URL
+  phoneNumber?: string; // Optional phone number
+  name?: string; // Optional name
+}
+
 export interface IUserWithPopulatedRole extends IUser {
   roleId: IProfessional | IParent; // roleId is populated, so it includes profileImage and name
 }

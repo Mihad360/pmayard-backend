@@ -5,7 +5,7 @@ import { messageControllers } from "./message.controller";
 const router = express.Router();
 
 router.get(
-  "/message/:conversationId",
+  "/:conversationId",
   auth("admin", "professional", "parent"),
   messageControllers.getMessages,
 );

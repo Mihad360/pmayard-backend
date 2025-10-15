@@ -10,6 +10,9 @@ import { SubjectRoutes } from "../modules/Subject/subject.route";
 import { MaterialRoutes } from "../modules/Materials/material.route";
 import { EventRoutes } from "../modules/Event/event.route";
 import { MessageRoutes } from "../modules/Message/message.route";
+import { NotificationRoutes } from "../modules/Notification/notification.route";
+import { RuleRoutes } from "../modules/Rules/rule.route";
+import { AttachmentRoutes } from "../modules/Attachment/attachment.route";
 
 const router = Router();
 
@@ -57,6 +60,18 @@ const moduleRoutes = [
   {
     path: "/messages",
     route: MessageRoutes,
+  },
+  {
+    path: "/notifications",
+    route: NotificationRoutes,
+  },
+  {
+    path: "/rules",
+    route: RuleRoutes,
+  },
+  {
+    path: "/attachments",
+    route: AttachmentRoutes,
   },
 ];
 

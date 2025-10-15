@@ -2,8 +2,9 @@
 import app from "./app";
 import config from "./app/config";
 import mongoose from "mongoose";
-import { Server } from "http";
+import { createServer, Server } from "http";
 import seedSuperAdmin from "./app/DB";
+import { initSocketIO } from "./app/utils/socket";
 
 let server: Server;
 
@@ -13,6 +14,19 @@ async function main() {
       dbName: "pmayard",
     });
     console.log("Database connected successfully");
+
+    // Start HTTP server
+    server = createServer(app);
+    // Start the server and log the time taken
+    const serverStartTime = Date.now();
+    server.listen(config.port, () => {
+      console.log(
+        `🚀 Server is running on port ${config.port} and took ${Date.now() - serverStartTime}ms to start`,
+      );
+    });
+
+    // Initialize Socket.IO
+    initSocketIO(server);
 
     seedSuperAdmin().catch((err) =>
       console.error("Super admin seeding error:", err),

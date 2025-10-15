@@ -13,7 +13,7 @@ import { ConversationModel } from "../Conversation/conversation.model";
 import { ConversationType } from "../Conversation/conversation.interface";
 import { ProfessionalModel } from "../Professional/professional.model";
 import { INotification } from "../Notification/notification.interface";
-import { createAdminNotification } from "../Notification/notification.service";
+import { createNotification } from "../Notification/notification.service";
 
 const createParent = async (
   file: Express.Multer.File,
@@ -62,7 +62,7 @@ const createParent = async (
           type: "user_join",
           message: `A Parent joined the app: (${createdParent[0]?.name})`,
         };
-        await createAdminNotification(notInfo);
+        await createNotification(notInfo);
       }
 
       // Step 6: Update the user with the parent role

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import HttpStatus from "http-status";
-import { Types } from "mongoose";
+import mongoose, { Types } from "mongoose";
 import { JwtPayload } from "../../interface/global";
 import { UserModel } from "../User/user.model";
 import AppError from "../../erros/AppError";
@@ -16,7 +16,7 @@ import { ISession } from "../Session/session.interface";
 import { SessionModel } from "../Session/session.model";
 import dayjs from "dayjs";
 import { INotification } from "../Notification/notification.interface";
-import { createAdminNotification } from "../Notification/notification.service";
+import { createNotification } from "../Notification/notification.service";
 
 const getAllParents = async (
   user: JwtPayload,
@@ -92,7 +92,7 @@ const getAllParents = async (
             $filter: {
               input: "$sessions",
               as: "session",
-              cond: { $eq: ["$$session.status", "Upcoming"] },
+              cond: { $ne: ["$$session.status", "Canceled"] },
             },
           },
         },
@@ -314,80 +314,103 @@ const assignProfessionalAndSetCode = async (
   payload: ISession,
   userId: string,
 ) => {
-  const senderId = new Types.ObjectId(userId);
-  const isParentExist = await ParentModel.findById(parentId);
-  if (!isParentExist) {
-    throw new AppError(HttpStatus.NOT_FOUND, "Parent not found");
-  }
+  const session = await mongoose.startSession(); // Start a session for the transaction
 
-  const isProfessionalExist = await ProfessionalModel.findById(professionalId);
-  if (!isProfessionalExist) {
-    throw new AppError(HttpStatus.NOT_FOUND, "Professional not found");
-  }
+  try {
+    session.startTransaction(); // Begin the transaction
 
-  const availability = isProfessionalExist?.availability;
-  const isAvailable = availability.some((avail) =>
-    avail.timeSlots.find((slot) => slot.status === "available"),
-  );
+    // Check if Parent exists
+    const isParentExist = await ParentModel.findById(parentId).session(session);
+    if (!isParentExist) {
+      throw new AppError(HttpStatus.NOT_FOUND, "Parent not found");
+    }
 
-  if (!isAvailable) {
-    throw new AppError(
-      HttpStatus.BAD_REQUEST,
-      "No available time slots for this professional",
-    );
-  }
-  const isCodeMatch = await SessionModel.findOne({
-    $and: [{ code: payload.code, status: "Upcoming" }],
-  });
-  if (isCodeMatch) {
-    throw new AppError(HttpStatus.BAD_REQUEST, "Please enter a new code");
-  }
+    // Check if Professional exists
+    const isProfessionalExist =
+      await ProfessionalModel.findById(professionalId).session(session);
+    if (!isProfessionalExist) {
+      throw new AppError(HttpStatus.NOT_FOUND, "Professional not found");
+    }
 
-  payload.parent = isParentExist._id;
-  payload.professional = isProfessionalExist._id;
-  payload.status = "Upcoming";
-  // payload.day = dayjs(payload.date).format("dddd");
-
-  const sessionResult = await SessionModel.create(payload);
-
-  const updatedSession = await SessionModel.findByIdAndUpdate(
-    sessionResult._id,
-    { code: payload.code },
-    { new: true },
-  );
-
-  if (updatedSession) {
-    await sendAssignmentEmail(
-      updatedSession.professional,
-      updatedSession.parent,
-      updatedSession.code,
+    // Check if Professional has available time slots
+    const availability = isProfessionalExist.availability;
+    const isAvailable = availability.some((avail) =>
+      avail.timeSlots.find((slot) => slot.status === "available"),
     );
 
-    const notInfo: INotification = {
-      sender: senderId,
-      recipient: updatedSession.parent,
-      type: "tutor_assigned",
-      message: `A new Tutor assigned to you: (${isProfessionalExist.name})`,
-    };
-    await createAdminNotification(notInfo);
+    if (!isAvailable) {
+      throw new AppError(
+        HttpStatus.BAD_REQUEST,
+        "No available time slots for this professional",
+      );
+    }
 
-    const notInfos: INotification = {
-      sender: senderId,
-      recipient: updatedSession.professional,
-      type: "parent_assigned",
-      message: `A new Parent assigned to you: (${isParentExist.name})`,
-    };
-    await createAdminNotification(notInfos);
+    // Check if the code already exists for an upcoming session
+    const isCodeMatch = await SessionModel.findOne({
+      $and: [{ code: payload.code, status: "Upcoming" }],
+    }).session(session);
+    if (isCodeMatch) {
+      throw new AppError(HttpStatus.BAD_REQUEST, "Please enter a new code");
+    }
+
+    // Set the parent and professional in the payload and set the session status
+    payload.parent = isParentExist._id;
+    payload.professional = isProfessionalExist._id;
+    payload.status = "Upcoming";
+
+    // Create the session
+    const sessionResult = await SessionModel.create([payload], { session });
+    const updatedSession = await SessionModel.findByIdAndUpdate(
+      sessionResult[0]._id,
+      { code: payload.code },
+      { new: true, session },
+    );
+    console.log(updatedSession);
+    if (updatedSession) {
+      // Send assignment email for both professional and parent
+      const senderId = new Types.ObjectId(userId);
+      await sendAssignmentEmail(
+        updatedSession.professional,
+        updatedSession.parent,
+        updatedSession.code,
+      );
+
+      // Create notifications for both parent and professional
+      const notInfo: INotification = {
+        sender: senderId,
+        recipient: updatedSession.parent,
+        type: "tutor_assigned",
+        message: `A new Tutor assigned to you: (${isProfessionalExist.name})`,
+      };
+      await createNotification(notInfo, session);
+
+      const notInfos: INotification = {
+        sender: senderId,
+        recipient: updatedSession.professional,
+        type: "parent_assigned",
+        message: `A new Parent assigned to you: (${isParentExist.name})`,
+      };
+      console.log(notInfos);
+      await createNotification(notInfos, session);
+    }
+
+    // Commit the transaction
+    await session.commitTransaction();
+    session.endSession(); // End the session
+
+    return updatedSession;
+  } catch (error) {
+    // If any error occurs, abort the transaction
+    await session.abortTransaction();
+    session.endSession(); // End the session
+    throw error; // Rethrow the error to be handled in the controller or elsewhere
   }
-
-  return updatedSession;
 };
 
 const getAllParentAssignedProfessionals = async (parentId: string) => {
   // Find all sessions associated with the parent where the status is 'upcoming'
   const sessions = await SessionModel.find({
     parent: parentId,
-    status: "Upcoming",
     isDeleted: false,
   }).populate({
     path: "professional", // Populate the 'professional' field in the session model

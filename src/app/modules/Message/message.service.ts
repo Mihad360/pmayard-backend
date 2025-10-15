@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import HttpStatus from "http-status";
 import AppError from "../../erros/AppError";
-import { IMessage } from "./message.interface";
+import {
+  IMessage,
+} from "./message.interface";
 import { Message } from "./message.model";
 import mongoose, { Types } from "mongoose";
 import { ConversationModel } from "../Conversation/conversation.model";
@@ -190,6 +192,7 @@ const getMessages = async (conversationId: string, user: JwtPayload) => {
       const messages = await Message.find({
         conversation_id: populatedConversation._id,
       })
+        .sort({ createdAt: -1 })
         .populate({
           path: "sender_id",
           select: "email roleId role",
@@ -204,6 +207,7 @@ const getMessages = async (conversationId: string, user: JwtPayload) => {
                   : "User",
           },
         })
+        .populate({ path: "attachment_id", select: "fileUrl mimeType" })
         .session(session);
 
       result = {
@@ -253,10 +257,13 @@ const getMessages = async (conversationId: string, user: JwtPayload) => {
 
       const messages = await Message.find({
         conversation_id: populatedGroupConversation._id,
-      }).session(session);
+      })
+        .sort({ createdAt: -1 })
+        .populate({ path: "attachment_id", select: "fileUrl mimeType" })
+        .session(session);
 
       // Format the messages
-      const formattedMessages = messages.map((message) => {
+      const formattedMessages = messages.map((message: any) => {
         const sender = populatedGroupConversation.users.find(
           (user) => user._id.toString() === message.sender_id.toString(),
         ) as Partial<IUserWithPopulatedRole>;
@@ -266,6 +273,12 @@ const getMessages = async (conversationId: string, user: JwtPayload) => {
           senderRole: sender?.role,
           senderProfileImage: sender?.roleId?.profileImage || null,
           senderName: sender?.roleId?.name,
+          attachment: message.attachment_id
+            ? {
+                fileUrl: message.attachment_id.fileUrl,
+                mimeType: message.attachment_id.mimeType,
+              }
+            : null,
         } as any;
       });
 

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-namespace */
 import { Types } from "mongoose";
-
+import { Server as SocketIo } from "socket.io";
 
 export interface JwtPayload {
   user: Types.ObjectId | string;
@@ -17,6 +17,11 @@ declare global {
   namespace Express {
     interface Request {
       user?: JwtPayload;
+    }
+  }
+  namespace NodeJS {
+    interface Global {
+      io: SocketIo;
     }
   }
 }

@@ -14,7 +14,7 @@ import QueryBuilder from "../../../builder/QueryBuilder";
 import { ConversationModel } from "../Conversation/conversation.model";
 import { ConversationType } from "../Conversation/conversation.interface";
 import { INotification } from "../Notification/notification.interface";
-import { createAdminNotification } from "../Notification/notification.service";
+import { createNotification } from "../Notification/notification.service";
 
 const createProfessional = async (
   file: Express.Multer.File,
@@ -70,7 +70,7 @@ const createProfessional = async (
           type: "user_join",
           message: `A Tutor joined the app: (${createdProfessional[0]?.name})`,
         };
-        await createAdminNotification(notInfo);
+        await createNotification(notInfo);
       }
 
       // Step 6: Update the user with the professional role

@@ -27,7 +27,35 @@ const getMe = catchAsync(async (req, res) => {
   });
 });
 
+const editUserProfile = catchAsync(async (req, res) => {
+  const user = req.user as JwtPayload;
+  const id = user.user as string;
+  const file = req.file as Express.Multer.File;
+  const result = await userServices.editUserProfile(id, file, req.body);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "User edit succesfully",
+    data: result,
+  });
+});
+
+const deleteUser = catchAsync(async (req, res) => {
+  const id = req.params.id;
+  const result = await userServices.deleteUser(id);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "User deleted succesfully",
+    data: result,
+  });
+});
+
 export const userControllers = {
   registerUser,
   getMe,
+  editUserProfile,
+  deleteUser,
 };
