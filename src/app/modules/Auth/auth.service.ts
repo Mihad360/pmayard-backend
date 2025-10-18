@@ -9,6 +9,7 @@ import { JwtPayload } from "../../interface/global";
 import { sendEmail } from "../../utils/sendEmail";
 import { checkOtp, generateOtp, verificationEmailTemplate } from "./auth.utils";
 import { Types } from "mongoose";
+import { IUserWithPopulatedRole } from "../User/user.interface";
 
 const loginUser = async (payload: IAuth) => {
   const user = await UserModel.findOne({
@@ -200,10 +201,58 @@ const changePassword = async (
   return { message: "Change password successfull" };
 };
 
+const resendOtp = async (email: string) => {
+  const user = await UserModel.findOne({ email });
+
+  if (!user) {
+    throw new AppError(HttpStatus.NOT_FOUND, "User not found");
+  }
+
+  if (user.isDeleted) {
+    throw new AppError(HttpStatus.FORBIDDEN, "This user is deleted");
+  }
+
+  // Check if OTP exists and is still valid (not expired)
+  if (user.expiresAt && new Date(user.expiresAt) > new Date()) {
+    // OTP is still valid, throw an error because you cannot resend it yet
+    throw new AppError(
+      HttpStatus.BAD_REQUEST,
+      "OTP is still valid. Please try again after it expires.",
+    );
+  } else {
+    // OTP has expired or has not been set, generate a new OTP
+    const otp = generateOtp(); // Generate new OTP
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 1); // Set OTP expiration to 1 minute from now
+    // Save the new OTP and expiration time to the user's record
+    const updatedUser = (await UserModel.findOneAndUpdate(
+      { email },
+      { otp, expiresAt },
+      { new: true },
+    ).select("-password -passwordChangedAt -otp")) as IUserWithPopulatedRole;
+
+    // Send email with the new OTP
+    const subject = "New Verification Code";
+    const mail = await sendEmail(
+      user.email,
+      subject,
+      verificationEmailTemplate(updatedUser.roleId.name as string, otp),
+    );
+    if (!mail) {
+      throw new AppError(
+        HttpStatus.BAD_REQUEST,
+        "Something went wrong while sending the email!",
+      );
+    }
+    return updatedUser;
+  }
+};
+
 export const authServices = {
   loginUser,
   forgetPassword,
   resetPassword,
   changePassword,
   verifyOtp,
+  resendOtp,
 };

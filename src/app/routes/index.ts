@@ -13,6 +13,7 @@ import { MessageRoutes } from "../modules/Message/message.route";
 import { NotificationRoutes } from "../modules/Notification/notification.route";
 import { RuleRoutes } from "../modules/Rules/rule.route";
 import { AttachmentRoutes } from "../modules/Attachment/attachment.route";
+import { ConversationRoutes } from "../modules/Conversation/conversation.route";
 
 const router = Router();
 
@@ -72,6 +73,10 @@ const moduleRoutes = [
   {
     path: "/attachments",
     route: AttachmentRoutes,
+  },
+  {
+    path: "/conversations",
+    route: ConversationRoutes,
   },
 ];
 

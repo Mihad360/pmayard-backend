@@ -1,15 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import HttpStatus from "http-status";
 import AppError from "../../erros/AppError";
-import {
-  IMessage,
-} from "./message.interface";
+import { IMessage } from "./message.interface";
 import { Message } from "./message.model";
 import mongoose, { Types } from "mongoose";
 import { ConversationModel } from "../Conversation/conversation.model";
 import { JwtPayload } from "../../interface/global";
 import { UserModel } from "../User/user.model";
 import { IUserWithPopulatedRole } from "../User/user.interface";
+import { emitMessageData } from "../../utils/socket";
+import { IConversationWithUsers } from "../Conversation/conversation.interface";
 
 const sendMessageText = async (
   conversationId: string,
@@ -23,10 +23,13 @@ const sendMessageText = async (
     session.startTransaction();
 
     // Check if the conversation exists for the provided conversation ID and userId
-    const conversation = await ConversationModel.findOne({
-      _id: conversationId,
-      users: { $in: [userId] },
-    }).session(session); // Ensure session is used
+    const conversation: IConversationWithUsers | any =
+      await ConversationModel.findOne({
+        _id: conversationId,
+        users: { $in: [userId] },
+      })
+        .populate({ path: "users", select: "email role" })
+        .session(session);
 
     if (!conversation) {
       throw new AppError(
@@ -68,6 +71,12 @@ const sendMessageText = async (
       );
     }
 
+    emitMessageData({
+      conversationId,
+      senderId: userId.toString(),
+      messageContent: result[0].message_text,
+      messageType: result[0].message_type,
+    });
     // Commit transaction after everything is done
     await session.commitTransaction();
     await session.endSession();

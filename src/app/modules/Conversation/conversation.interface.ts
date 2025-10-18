@@ -1,5 +1,6 @@
 import { Types } from "mongoose";
 import { IMessage } from "../Message/message.interface";
+import { IUser } from "../User/user.interface";
 
 // Enum to define the type of conversation
 export enum ConversationType {
@@ -19,4 +20,7 @@ export interface IConversation {
 
 export interface IConversationExtendsWithLastMsg extends IConversation {
   lastMsg: IMessage;
+}
+export interface IConversationWithUsers extends Omit<IConversation, "users"> {
+  users: IUser[]; // Replace ObjectId array with fully populated IUser array
 }

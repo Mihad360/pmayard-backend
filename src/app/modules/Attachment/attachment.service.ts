@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import HttpStatus from "http-status";
 import mongoose, { Types } from "mongoose";
 import { JwtPayload } from "../../interface/global";
@@ -7,6 +8,7 @@ import AppError from "../../erros/AppError";
 import { sendFileToCloudinary } from "../../utils/sendImageToCloudinary";
 import { Message } from "../Message/message.model";
 import { AttachmentModel } from "./attachment.model";
+import { emitMessageData } from "../../utils/socket";
 
 const sendMessageByAttachment = async (
   files: Express.Multer.File[],
@@ -14,17 +16,17 @@ const sendMessageByAttachment = async (
   user: JwtPayload,
   payload: IMessage,
 ) => {
-  const userId = new Types.ObjectId(user.user); // Extract the user ID from the JWT token
+  const userId = new Types.ObjectId(user.user);
   const session = await mongoose.startSession();
 
   try {
     session.startTransaction();
 
-    // Check if the conversation exists for the provided conversation ID and userId
+    // Check if the conversation exists
     const conversation = await ConversationModel.findOne({
       _id: conversationId,
       users: { $in: [userId] },
-    }).session(session); // Ensure session is used
+    }).session(session);
 
     if (!conversation) {
       throw new AppError(
@@ -37,9 +39,10 @@ const sendMessageByAttachment = async (
     payload.sender_id = userId;
     payload.conversation_id = new Types.ObjectId(conversationId);
 
-    const uploadedFiles: string[] = []; // Array to store the file URLs (secure_url)
+    const uploadedFiles: string[] = []; // Array to store file URLs
     const uploadedFilesIds: string[] = []; // Array to store attachment model IDs
     const uploadedFileMimetypes: string[] = []; // Array to store mimetypes
+    const uploadedFileNames: string[] = []; // Array to store original file names
 
     if (files) {
       for (const file of files as Express.Multer.File[]) {
@@ -50,7 +53,8 @@ const sendMessageByAttachment = async (
         );
 
         uploadedFiles.push(uploadedFile.secure_url);
-        uploadedFileMimetypes.push(file.mimetype); // Store mimetype
+        uploadedFileMimetypes.push(file.mimetype);
+        uploadedFileNames.push(file.originalname); // Store original file name
       }
     }
     payload.attachment_id = [];
@@ -61,20 +65,20 @@ const sendMessageByAttachment = async (
       throw new AppError(HttpStatus.BAD_REQUEST, "Message failed to send");
     }
 
-    // 2. Create the Attachment models based on the uploaded files
+    // Create Attachment models for each uploaded file
+    const attachmentsData = [];
     for (let i = 0; i < uploadedFiles.length; i++) {
-      const fileUrls = uploadedFiles[i];
-      const mimetypes = uploadedFileMimetypes[i];
       const attachment = await AttachmentModel.create(
         [
           {
             conversation_id: conversation._id,
-            message_id: result[0]._id, // Associate attachment with the created message
-            fileUrl: fileUrls, // Store the Cloudinary URL of the uploaded file
-            mimeType: mimetypes, // Store the mimetype of the file
+            message_id: result[0]._id,
+            fileUrl: uploadedFiles[i],
+            mimeType: uploadedFileMimetypes[i],
+            fileName: uploadedFileNames[i], // Store original file name
           },
         ],
-        { session }, // Ensure session is passed for atomicity
+        { session },
       );
 
       if (!attachment) {
@@ -84,16 +88,21 @@ const sendMessageByAttachment = async (
         );
       }
 
-      // Push the attachment ID into the array
       uploadedFilesIds.push(attachment[0]._id.toString());
+      attachmentsData.push({
+        id: attachment[0]._id.toString(),
+        fileUrl: uploadedFiles[i],
+        mimeType: uploadedFileMimetypes[i],
+        fileName: uploadedFileNames[i],
+      });
     }
 
-    // 3. Update the message with the attachment IDs
+    // Update the message with the attachment IDs
     const updatedMessage = await Message.findByIdAndUpdate(
       result[0]._id,
-      { attachment_id: uploadedFilesIds }, // Update the attachment_id field with the created attachment IDs
+      { attachment_id: uploadedFilesIds },
       { new: true, session },
-    );
+    ).populate("attachment_id"); // Populate to get attachment details
 
     if (!updatedMessage) {
       throw new AppError(
@@ -119,12 +128,18 @@ const sendMessageByAttachment = async (
     await session.commitTransaction();
     await session.endSession();
 
-    // Return the result (updated message with attachment references)
+    // Emit message data with all attachments
+    emitMessageData({
+      conversationId,
+      senderId: userId.toString(),
+      attachment: attachmentsData, // Send array of all attachments
+      messageType: result[0].message_type,
+    });
+
     return updatedMessage;
   } catch (error) {
     await session.abortTransaction();
     await session.endSession();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     throw new AppError(HttpStatus.BAD_REQUEST, error as any);
   }
 };

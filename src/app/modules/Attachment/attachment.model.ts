@@ -9,6 +9,7 @@ const attachmentSchema = new Schema<IAttachment>(
     },
     message_id: { type: Schema.Types.ObjectId, ref: "Message" },
     fileUrl: { type: String },
+    fileName: { type: String },
     mimeType: { type: String },
     isDeleted: { type: Boolean, default: false },
   },

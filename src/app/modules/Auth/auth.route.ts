@@ -4,6 +4,7 @@ import auth from "../../middlewares/auth";
 
 const router = express.Router();
 
+router.post("/resend-otp/:email", authControllers.resendOtp);
 router.post("/login", authControllers.loginUser);
 router.post("/forget-password", authControllers.forgetPassword);
 router.post("/reset-password", authControllers.resetPassword);

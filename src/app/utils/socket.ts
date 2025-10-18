@@ -58,36 +58,34 @@ export const initSocketIO = async (server: HttpServer): Promise<void> => {
 
   // Authentication middleware: now takes the token from headers.
   io.use(async (socket: Socket, next: (err?: any) => void) => {
-    const token =
-      (socket.handshake.auth.token as string) ||
-      (socket.handshake.headers.token as string);
+    const token = socket.handshake.headers.token as string;
 
     if (!token) {
-      return next(
-        new AppError(
-          HttpStatus.UNAUTHORIZED,
-          "Authentication error: Token missing",
-        ),
-      );
+      return next(new AppError(HttpStatus.UNAUTHORIZED, "Token missing"));
     }
 
+    // Verify the token
     const userDetails = verifyToken(token, config.jwt_access_secret as string);
     if (!userDetails) {
       return next(new Error("Authentication error: Invalid token"));
     }
+
     const user = await UserModel.findById(userDetails.user).select(
       "_id name email role",
     );
-
     if (!user) {
       return next(new Error("Authentication error: User not found"));
     }
 
+    // Attach user data to the socket object
     socket.user = {
       _id: user._id.toString(),
       email: user.email,
       role: user.role as string,
     };
+
+    // Store the socket ID in the connectedUsers map
+    connectedUsers.set(socket.user._id.toString(), { socketID: socket.id });
 
     next();
   });
@@ -101,38 +99,17 @@ export const initSocketIO = async (server: HttpServer): Promise<void> => {
       role: socket.user?.role,
     });
 
+    socket.on("userConnected", ({ userId }: { userId: string }) => {
+      connectedUsers.set(userId, { socketID: socket.id });
+      console.log(`User ${userId} connected with socket ID: ${socket.id}`);
+    });
+
     if (socket.user && socket.user._id) {
       connectedUsers.set(socket.user._id.toString(), { socketID: socket.id });
       console.log(
         `Registered user ${socket.user._id.toString()} with socket ID: ${socket.id}`,
       );
     }
-
-    socket.on("userConnected", ({ userId }: { userId: string }) => {
-      connectedUsers.set(userId, { socketID: socket.id });
-      console.log(`User ${userId} connected with socket ID: ${socket.id}`);
-    });
-
-    // Listen for 'locationRequest' event (this is the real-time data coming from the backend)
-    socket.on("locationRequest", (data) => {
-      const { userId, status } = data;
-
-      // Log the details of the received location request to verify the information
-      console.log("Received Location Request:", {
-        userId,
-        status,
-      });
-    });
-
-    socket.on("locationUpdated", (data) => {
-      const { userId, status } = data;
-
-      // Log the details of the received location request to verify the information
-      console.log("Received Location Request:", {
-        userId,
-        status,
-      });
-    });
 
     socket.on("disconnect", () => {
       console.log(
@@ -244,5 +221,49 @@ export const emitLocationLatLong = async (data: any) => {
     }
   } catch (error) {
     console.error("Error in location update:", error);
+  }
+};
+
+export const emitMessageData = ({
+  conversationId,
+  senderId,
+  messageContent,
+  attachment,
+  messageType,
+}: {
+  conversationId: string;
+  senderId: string;
+  messageContent?: string;
+  attachment?: {
+    id: string;
+    fileUrl: string;
+    mimeType: string;
+    fileName: string;
+  }[];
+  messageType: string;
+}) => {
+  if (!io) {
+    throw new Error("Socket.IO is not initialized");
+  }
+
+  // Base message object (same for everyone)
+  const message = {
+    sender_id: senderId,
+    lastMessage: messageContent ? messageContent : "",
+    attachment: attachment ? attachment : "",
+    message_type: messageType,
+    timestamp: new Date().toISOString(),
+  };
+
+  if (message) {
+    // Create personalized data for THIS specific recipient
+    const personalizedData = {
+      conversationId,
+      message,
+    };
+
+    io.emit(`new_message-${conversationId}`, personalizedData);
+  } else {
+    throw new AppError(HttpStatus.BAD_REQUEST, "Participant not found");
   }
 };
