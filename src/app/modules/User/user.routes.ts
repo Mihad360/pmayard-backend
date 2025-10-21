@@ -26,6 +26,7 @@ router.patch(
 );
 router.post(
   "/register",
+  auth("admin"),
   validateRequest(userValidationSchema),
   userControllers.registerUser,
 );
@@ -33,6 +34,18 @@ router.delete(
   "/:id",
   auth("admin", "parent", "professional"),
   userControllers.deleteUser,
+);
+router.post(
+  "/role",
+  auth("professional", "parent"),
+  upload.single("image"),
+  (req: Request, res: Response, next: NextFunction) => {
+    if (req.body.data) {
+      req.body = JSON.parse(req.body.data);
+    }
+    next();
+  },
+  userControllers.createRole,
 );
 
 export const userRoutes = router;

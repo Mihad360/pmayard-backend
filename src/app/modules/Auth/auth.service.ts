@@ -1,10 +1,11 @@
 import bcrypt from "bcrypt";
+import { JwtPayload as jwtPayload } from "jsonwebtoken";
 import HttpStatus from "http-status";
 import AppError from "../../erros/AppError";
 import { UserModel } from "../User/user.model";
 import { IAuth } from "./auth.interface";
 import config from "../../config";
-import { createToken } from "../../utils/jwt";
+import { createToken, verifyToken } from "../../utils/jwt";
 import { JwtPayload } from "../../interface/global";
 import { sendEmail } from "../../utils/sendEmail";
 import { checkOtp, generateOtp, verificationEmailTemplate } from "./auth.utils";
@@ -12,19 +13,58 @@ import { Types } from "mongoose";
 import { IUserWithPopulatedRole } from "../User/user.interface";
 
 const loginUser = async (payload: IAuth) => {
+  // Find user by email
   const user = await UserModel.findOne({
     email: payload.email,
   });
+
+  // Check if user exists
   if (!user) {
     throw new AppError(HttpStatus.NOT_FOUND, "The user is not found");
   }
+
+  // Check if user is deleted
   if (user?.isDeleted) {
     throw new AppError(HttpStatus.BAD_REQUEST, "The user is already Blocked");
   }
+
+  // Compare password
   if (!(await UserModel.compareUserPassword(payload.password, user.password))) {
     throw new AppError(HttpStatus.FORBIDDEN, "Password did not matched");
   }
 
+  // If user is not verified, send OTP
+  if (!user.isVerified) {
+    const otp = generateOtp();
+    const expireAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    // Update user with OTP and expiration time
+    const updateUser = await UserModel.findOneAndUpdate(
+      { email: user.email },
+      {
+        otp: otp,
+        expiresAt: expireAt,
+      },
+      { new: true },
+    );
+
+    if (updateUser) {
+      const subject = "Verification Code";
+      const mail = await sendEmail(
+        user.email,
+        subject,
+        verificationEmailTemplate(user.email, otp as string),
+      );
+      if (!mail) {
+        throw new AppError(HttpStatus.BAD_REQUEST, "Something went wrong!");
+      }
+      return {
+        message: "OTP has been sent to your email. Please verify to continue.",
+      };
+    }
+  }
+
+  // If user is already verified, generate and return tokens
   const userId = user?._id;
 
   if (!userId) {
@@ -42,12 +82,6 @@ const loginUser = async (payload: IAuth) => {
     config.jwt_access_secret as string,
     config.jwt_access_expires_in as string,
   );
-
-  if (accessToken && !user.isVerified) {
-    await UserModel.findByIdAndUpdate(userId, {
-      isVerified: true,
-    });
-  }
 
   return {
     _id: user._id,
@@ -128,15 +162,30 @@ const verifyOtp = async (payload: { email: string; otp: string }) => {
     );
   }
   const check = await checkOtp(payload.email, payload.otp);
-  return check;
+  if (check) {
+    const jwtPayload: JwtPayload = {
+      user: user._id,
+      email: user?.email,
+      role: user?.role,
+    };
+
+    const accessToken = createToken(
+      jwtPayload,
+      config.jwt_access_secret as string,
+      "5m",
+    );
+    return { accessToken };
+  } else {
+    throw new AppError(HttpStatus.BAD_REQUEST, "Something went wrong");
+  }
 };
 
-const resetPassword = async (payload: {
-  email: string;
-  newPassword: string;
-}) => {
+const resetPassword = async (
+  payload: { newPassword: string },
+  userInfo: JwtPayload,
+) => {
   const user = await UserModel.findOne({
-    email: payload.email,
+    email: userInfo.email,
   });
 
   if (!user) {
@@ -145,8 +194,15 @@ const resetPassword = async (payload: {
   if (user?.isDeleted) {
     throw new AppError(HttpStatus.FORBIDDEN, "This User is deleted");
   }
-  if (!user.isVerified) {
-    throw new AppError(HttpStatus.BAD_REQUEST, "You are not verified");
+  // Check if password was changed recently (within the last 5 minutes)
+  const passwordChangedAt = user.passwordChangedAt;
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000); // 5 minutes in milliseconds
+
+  if (passwordChangedAt && passwordChangedAt > fiveMinutesAgo) {
+    throw new AppError(
+      HttpStatus.BAD_REQUEST,
+      "Password was recently changed. Please try again after 5 minutes.",
+    );
   }
 
   const newHashedPassword = await UserModel.newHashedPassword(
@@ -160,7 +216,22 @@ const resetPassword = async (payload: {
     },
     { new: true },
   );
-  return updateUser;
+  if (updateUser) {
+    const jwtPayload: JwtPayload = {
+      user: user._id,
+      email: user?.email,
+      role: user?.role,
+    };
+
+    const accessToken = createToken(
+      jwtPayload,
+      config.jwt_access_secret as string,
+      config.jwt_access_expires_in as string,
+    );
+    return { accessToken };
+  } else {
+    throw new AppError(HttpStatus.BAD_REQUEST, "Something went wrong");
+  }
 };
 
 const changePassword = async (
@@ -248,6 +319,45 @@ const resendOtp = async (email: string) => {
   }
 };
 
+const refreshToken = async (token: string) => {
+  const decoded = verifyToken(
+    token,
+    config.jwt_refresh_secret as string,
+  ) as jwtPayload;
+  const { email, iat } = decoded;
+  const user = await UserModel.isUserExistByCustomId(email);
+  if (!user) {
+    throw new AppError(HttpStatus.NOT_FOUND, "This User is not exist");
+  }
+  // checking if the user is already deleted
+  if (user?.isDeleted) {
+    throw new AppError(HttpStatus.FORBIDDEN, "This User is deleted");
+  }
+  if (
+    user.passwordChangedAt &&
+    (await UserModel.isOldTokenValid(user.passwordChangedAt, iat as number))
+  ) {
+    throw new AppError(HttpStatus.UNAUTHORIZED, "You are not authorized");
+  }
+
+  const jwtPayload: JwtPayload = {
+    user: user._id as Types.ObjectId,
+    email: user?.email,
+    role: user?.role,
+  };
+
+  const accessToken = createToken(
+    jwtPayload,
+    config.jwt_access_secret as string,
+    config.jwt_access_expires_in as string,
+  );
+
+  return {
+    role: user.role,
+    accessToken,
+  };
+};
+
 export const authServices = {
   loginUser,
   forgetPassword,
@@ -255,4 +365,5 @@ export const authServices = {
   changePassword,
   verifyOtp,
   resendOtp,
+  refreshToken,
 };

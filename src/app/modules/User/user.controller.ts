@@ -53,9 +53,23 @@ const deleteUser = catchAsync(async (req, res) => {
   });
 });
 
+const createRole = catchAsync(async (req, res) => {
+  const file = req.file as Express.Multer.File;
+  const user = req.user as JwtPayload;
+  const result = await userServices.createRole(file, user, req.body);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "Parent created successfully",
+    data: result,
+  });
+});
+
 export const userControllers = {
   registerUser,
   getMe,
   editUserProfile,
   deleteUser,
+  createRole,
 };

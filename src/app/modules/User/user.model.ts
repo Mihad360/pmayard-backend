@@ -84,7 +84,17 @@ userSchema.statics.isOldTokenValid = async function (
   jwtIssuedTime: number,
 ) {
   const passwordLastChangedAt = new Date(passwordChangedTime).getTime() / 1000;
-  return passwordLastChangedAt > jwtIssuedTime;
+  const jwtIssuedAtInSeconds = jwtIssuedTime;
+  if (passwordLastChangedAt > jwtIssuedAtInSeconds) {
+    console.log("Token is old.");
+  } else {
+    console.log("Token is valid.");
+  }
+  return passwordLastChangedAt > jwtIssuedAtInSeconds;
+};
+
+userSchema.statics.isUserExistByCustomId = async function (email: string) {
+  return await UserModel.findOne({ email }).select("-password");
 };
 
 export const UserModel = model<IUser, UserInterface>("User", userSchema);

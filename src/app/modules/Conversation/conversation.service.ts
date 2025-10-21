@@ -5,14 +5,24 @@ import { ConversationModel } from "./conversation.model";
 import AppError from "../../erros/AppError";
 import { UserModel } from "../User/user.model";
 
-const getMyConversations = async (user: JwtPayload) => {
+const getMyConversations = async (
+  user: JwtPayload,
+  filterParams: { type?: string },
+) => {
   try {
     const userId = new Types.ObjectId(user.user); // Convert user ID to ObjectId
 
-    // Find all conversations where the user is part of the conversation
-    const conversations = await ConversationModel.find({
-      users: { $in: [userId] },
-    });
+    // Build the filter query dynamically
+    // eslint-disable-next-line prefer-const, @typescript-eslint/no-explicit-any
+    let filterQuery: any = { users: { $in: [userId] } };
+
+    // Apply filter if a type is provided in filterParams
+    if (filterParams?.type) {
+      filterQuery.type = filterParams.type; // Filter by type
+    }
+
+    // Find all conversations based on the filter query
+    const conversations = await ConversationModel.find(filterQuery);
 
     // Check if conversations are found
     if (!conversations || conversations.length === 0) {

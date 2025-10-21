@@ -19,7 +19,9 @@ const loginUser = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "User logged in successfully",
+    message: accessToken
+      ? "User logged in successfully"
+      : "OTP has been sent to your email. Please verify to continue.",
     data: {
       _id,
       role,
@@ -63,12 +65,13 @@ const resendOtp = catchAsync(async (req, res) => {
 });
 
 const resetPassword = catchAsync(async (req, res) => {
-  const result = await authServices.resetPassword(req.body);
+  const user = req.user as JwtPayload;
+  const result = await authServices.resetPassword(req.body, user);
 
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "Password reset successful",
+    message: "Password reset successfully",
     data: result,
   });
 });
@@ -86,6 +89,18 @@ const changePassword = catchAsync(async (req, res) => {
   });
 });
 
+const refreshToken = catchAsync(async (req, res) => {
+  const { refreshToken } = req.cookies;
+  const result = await authServices.refreshToken(refreshToken);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "Access token refreshed successfully",
+    data: result,
+  });
+});
+
 export const authControllers = {
   loginUser,
   forgetPassword,
@@ -93,4 +108,5 @@ export const authControllers = {
   resetPassword,
   changePassword,
   resendOtp,
+  refreshToken,
 };
