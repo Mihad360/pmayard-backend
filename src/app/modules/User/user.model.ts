@@ -23,6 +23,8 @@ const userSchema = new Schema<IUser, UserInterface>(
       type: String,
       required: true,
     },
+    name: { type: String },
+    profileImage: { type: String },
     role: {
       type: String,
       enum: ["professional", "parent", "admin"],

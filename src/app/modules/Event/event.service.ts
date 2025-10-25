@@ -27,7 +27,7 @@ const addEvent = async (payload: IEvent) => {
 
 const getAllEvents = async (query: Record<string, unknown>) => {
   const eventQuery = new QueryBuilder(
-    EventModel.find().sort({ createdAt: -1 }),
+    EventModel.find({ isDeleted: false }).sort({ createdAt: -1 }),
     query,
   )
     .filter()
@@ -40,7 +40,23 @@ const getAllEvents = async (query: Record<string, unknown>) => {
   return { meta, result };
 };
 
+const removeEvent = async (eventId: string) => {
+  const isEventExist = await EventModel.findById(eventId);
+  if (!isEventExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "Event not found");
+  }
+  const result = await EventModel.findByIdAndUpdate(
+    isEventExist._id,
+    {
+      isDeleted: true,
+    },
+    { new: true },
+  );
+  return result;
+};
+
 export const eventServices = {
   addEvent,
   getAllEvents,
+  removeEvent,
 };

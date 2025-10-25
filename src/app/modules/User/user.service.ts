@@ -13,57 +13,65 @@ import { IProfessional } from "../Professional/professional.interface";
 import { IParent } from "../Parent/parent.interface";
 import { ConversationModel } from "../Conversation/conversation.model";
 import { ConversationType } from "../Conversation/conversation.interface";
+import { generateOtp, verificationEmailTemplate } from "../Auth/auth.utils";
+import { sendEmail } from "../../utils/sendEmail";
 
 const registerUser = async (payload: IUser) => {
   const isUserExist = await UserModel.findOne({ email: payload.email });
   if (isUserExist) {
-    throw new AppError(
-      HttpStatus.BAD_REQUEST,
-      "The same user is already exist",
-    );
+    throw new AppError(HttpStatus.BAD_REQUEST, "The same user already exists");
   }
+
+  // Create the user in the database
   const result = await UserModel.create(payload);
+
   if (result) {
-    // const jwtPayload: JwtPayload = {
-    //   user: result._id,
-    //   email: result?.email,
-    //   role: result?.role,
-    // };
+    // Generate OTP for email verification
+    const otp = generateOtp();
+    const expireAt = new Date(Date.now() + 5 * 60 * 1000); // OTP expires in 5 minutes
 
-    // const accessToken = createToken(
-    //   jwtPayload,
-    //   config.jwt_access_secret as string,
-    //   config.jwt_access_expires_in as string,
-    // );
+    // Update user with OTP and expiration time
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      result._id,
+      {
+        otp: otp,
+        expiresAt: expireAt,
+      },
+      { new: true },
+    );
 
-    // const refreshToken = createToken(
-    //   jwtPayload,
-    //   config.jwt_refresh_secret as string,
-    //   config.jwt_refresh_expires_in as string,
-    // );
+    if (updatedUser) {
+      // Send OTP via email
+      const subject = "Verification Code";
+      const mail = await sendEmail(
+        result.email,
+        subject,
+        verificationEmailTemplate(result.email, otp as string),
+      );
 
-    // if (accessToken && refreshToken && !result.isVerified) {
-    //   await UserModel.findByIdAndUpdate(result._id, {
-    //     isVerified: true,
-    //   });
-    // }
+      if (!mail) {
+        throw new AppError(
+          HttpStatus.BAD_REQUEST,
+          "Something went wrong while sending OTP",
+        );
+      }
 
-    // if (accessToken && refreshToken && !result.isVerified) {
-    const notInfo: INotification = {
-      sender: new Types.ObjectId(result._id),
-      type: "user_registration",
-      message: `User Registered: (${result.email})`,
-    };
-    await createNotification(notInfo);
-    // }
+      // Send registration notification
+      const notInfo: INotification = {
+        sender: new Types.ObjectId(result._id),
+        type: "user_registration",
+        message: `User Registered: (${result.email})`,
+      };
+      await createNotification(notInfo);
 
-    // return {
-    //   role: result.role,
-    //   accessToken,
-    //   refreshToken,
-    // };
-    return result;
+      return {
+        message:
+          "User registered successfully. Please verify your email using the OTP sent.",
+      };
+    }
   }
+
+  throw new AppError(HttpStatus.BAD_REQUEST, "User registration failed.");
 };
 
 const getMe = async (user: JwtPayload) => {
@@ -99,7 +107,7 @@ const editUserProfile = async (
   if (user.isDeleted) {
     throw new AppError(HttpStatus.FORBIDDEN, "The user is blocked");
   }
-  let userUpdateData: IProfessional | IParent | null = null;
+  let userUpdateData: IProfessional | IParent | IUser | null = null;
   const updateData: Partial<IEditUserProfilePayload> = {};
 
   // Handle email update if provided
@@ -119,9 +127,22 @@ const editUserProfile = async (
   // Handle role-specific logic
   if (user.role === "admin") {
     // Admin: Only allow email to be updated
+    const admin = await UserModel.findById(user._id);
+    if (!admin) {
+      throw new AppError(HttpStatus.NOT_FOUND, "admin role not found");
+    }
     if (payload.email) {
       updateData.email = payload.email;
     }
+    if (payload.name) updateData.name = payload.name;
+    userUpdateData = await UserModel.findByIdAndUpdate(
+      admin._id,
+      {
+        name: updateData.name,
+        profileImage: updateData.profileImage,
+      },
+      { new: true },
+    ).select("-password");
   } else if (user.role === "professional") {
     // Professional: Find roleId in the Professional model and update other fields
     const professional = await ProfessionalModel.findById(user.roleId);

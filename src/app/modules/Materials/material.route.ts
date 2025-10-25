@@ -10,6 +10,11 @@ router.get(
   auth("admin", "professional"),
   materialControllers.getMaterials,
 );
+router.delete(
+  "/:materialId",
+  auth("admin", "professional"),
+  materialControllers.removeMaterial,
+);
 router.post(
   "/add-material/:subjectId",
   auth("admin"),

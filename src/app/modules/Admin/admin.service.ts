@@ -6,11 +6,7 @@ import { UserModel } from "../User/user.model";
 import AppError from "../../erros/AppError";
 import { ParentModel } from "../Parent/parent.model";
 import QueryBuilder from "../../../builder/QueryBuilder";
-import {
-  professionalSearch,
-  sendAssignmentEmail,
-  sessionSearch,
-} from "./admin.utils";
+import { sendAssignmentEmail, sessionSearch } from "./admin.utils";
 import { ProfessionalModel } from "../Professional/professional.model";
 import { ISession } from "../Session/session.interface";
 import { SessionModel } from "../Session/session.model";
@@ -85,6 +81,7 @@ const getAllParents = async (
         name: 1,
         childs_name: 1,
         childs_grade: 1,
+        relationship_with_child: 1,
         phoneNumber: 1,
         profileImage: 1,
         bookedSessions: {
@@ -168,30 +165,165 @@ const getAllProfessionals = async (
 ) => {
   const userId = new Types.ObjectId(user.user);
   const isUserExist = await UserModel.findById(userId);
+
   if (!isUserExist) {
-    throw new AppError(HttpStatus.NOT_FOUND, "The user is not exist");
+    throw new AppError(HttpStatus.NOT_FOUND, "The user does not exist");
   }
-  const sessions = await SessionModel.countDocuments({
-    professional: isUserExist.roleId,
-    status: "Completed",
+
+  const { searchTerm, page = 1, pageSize = 10 } = query;
+  const currentPage = Number(page) || 1;
+  const itemsPerPage = Number(pageSize) || 10;
+
+  // Create base pipeline
+  const aggregationPipeline: any[] = [
+    {
+      $match: { isDeleted: false },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "user",
+        foreignField: "_id",
+        as: "userInfo",
+      },
+    },
+    {
+      $unwind: {
+        path: "$userInfo",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+  ];
+
+  // CORRECTED SEARCH - using actual Professional schema fields
+  if (searchTerm) {
+    aggregationPipeline.push({
+      $match: {
+        $or: [
+          { name: { $regex: searchTerm, $options: "i" } },
+          { qualification: { $regex: searchTerm, $options: "i" } },
+          { subjects: { $regex: searchTerm, $options: "i" } }, // subjects exists (array)
+          { "userInfo.email": { $regex: searchTerm, $options: "i" } },
+        ],
+      },
+    });
+  }
+
+  // Add session lookup and other stages
+  aggregationPipeline.push(
+    {
+      $lookup: {
+        from: "sessions",
+        localField: "_id",
+        foreignField: "professional",
+        as: "sessions",
+      },
+    },
+    {
+      $project: {
+        email: "$userInfo.email",
+        name: 1,
+        qualification: 1,
+        phoneNumber: 1,
+        profileImage: 1,
+        subjects: 1, // ADDED: Professional's subjects field directly from the model
+        // Get subject from sessions (optional - if you still want it)
+        sessionSubject: {
+          $arrayElemAt: [
+            {
+              $map: {
+                input: {
+                  $filter: {
+                    input: "$sessions",
+                    as: "session",
+                    cond: {
+                      $and: [
+                        { $ne: ["$$session.subject", null] },
+                        { $ne: ["$$session.subject", ""] },
+                      ],
+                    },
+                  },
+                },
+                as: "session",
+                in: "$$session.subject",
+              },
+            },
+            0,
+          ],
+        },
+        totalSessions: {
+          $size: {
+            $filter: {
+              input: "$sessions",
+              as: "session",
+              cond: { $ne: ["$$session.status", "Canceled"] },
+            },
+          },
+        },
+      },
+    },
+    {
+      $sort: { totalSessions: -1 },
+    },
+    {
+      $skip: (currentPage - 1) * itemsPerPage,
+    },
+    {
+      $limit: itemsPerPage,
+    },
+  );
+
+  const result = await ProfessionalModel.aggregate(aggregationPipeline);
+
+  // Count pipeline - FIXED to match corrected search fields
+  const countPipeline: any[] = [
+    {
+      $match: { isDeleted: false },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "user",
+        foreignField: "_id",
+        as: "userInfo",
+      },
+    },
+    {
+      $unwind: {
+        path: "$userInfo",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+  ];
+
+  if (searchTerm) {
+    countPipeline.push({
+      $match: {
+        $or: [
+          { name: { $regex: searchTerm, $options: "i" } },
+          { qualification: { $regex: searchTerm, $options: "i" } },
+          { subjects: { $regex: searchTerm, $options: "i" } },
+          { "userInfo.email": { $regex: searchTerm, $options: "i" } },
+        ],
+      },
+    });
+  }
+
+  countPipeline.push({
+    $count: "total",
   });
 
-  const professionalsQuery = new QueryBuilder(
-    ProfessionalModel.find({ isDeleted: false }).populate({
-      path: "user",
-      select: "-password",
-    }),
-    query,
-  )
-    .search(professionalSearch)
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
+  const total = await ProfessionalModel.aggregate(countPipeline);
 
-  const meta = await professionalsQuery.countTotal();
-  const result = await professionalsQuery.modelQuery;
-  return { meta, sessions, result };
+  return {
+    meta: {
+      total: total[0]?.total || 0,
+      page: currentPage,
+      pageSize: itemsPerPage,
+      totalPages: Math.ceil((total[0]?.total || 0) / itemsPerPage),
+    },
+    result,
+  };
 };
 
 const getAllSessions = async (
@@ -408,42 +540,66 @@ const assignProfessionalAndSetCode = async (
 };
 
 const getAllParentAssignedProfessionals = async (parentId: string) => {
-  // Find all sessions associated with the parent where the status is 'upcoming'
-  const sessions = await SessionModel.find({
-    parent: parentId,
-    isDeleted: false,
-  }).populate({
-    path: "professional", // Populate the 'professional' field in the session model
-    select: "name profileImage email phoneNumber user",
-    populate: { path: "user", select: "email" },
-  });
+  const aggregationPipeline = [
+    {
+      $match: {
+        parent: new Types.ObjectId(parentId),
+        isDeleted: false,
+      },
+    },
+    {
+      $lookup: {
+        from: "professionals",
+        localField: "professional",
+        foreignField: "_id",
+        as: "professional",
+      },
+    },
+    {
+      $unwind: {
+        path: "$professional",
+        preserveNullAndEmptyArrays: false,
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "professional.user",
+        foreignField: "_id",
+        as: "professional.user",
+      },
+    },
+    {
+      $unwind: {
+        path: "$professional.user",
+        preserveNullAndEmptyArrays: false,
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        "professional._id": 1,
+        "professional.name": 1,
+        "professional.profileImage": 1,
+        "professional.phoneNumber": 1,
+        "professional.user.email": 1,
+        subject: 1,
+        sessionDate: 1, // include other session fields you need
+        status: 1,
+      },
+    },
+  ];
 
-  // If no sessions are found, throw an error
-  if (!sessions || sessions.length === 0) {
+  const result = await SessionModel.aggregate(aggregationPipeline);
+
+  if (!result || result.length === 0) {
     throw new AppError(
       HttpStatus.NOT_FOUND,
       "No upcoming sessions found for this parent",
     );
   }
 
-  // Retrieve professional-session data with their subject
-  const professionalSessionData = sessions.flatMap((session) => {
-    if (!session.professional) return []; // Handle case where professional is undefined
-
-    // Return professional with their session data (each session creates a new entry with subject)
-    return session;
-  });
-
-  // If no professionals are found, throw an error
-  if (professionalSessionData.length === 0) {
-    throw new AppError(
-      HttpStatus.NOT_FOUND,
-      "No professionals assigned to upcoming sessions",
-    );
-  }
-
-  // Return the detailed list with professional and session details including subject
-  return professionalSessionData;
+  return result;
 };
 
 const removeSession = async (sessionId: string) => {
@@ -505,29 +661,28 @@ const removeSession = async (sessionId: string) => {
   return result;
 };
 
-const getDashboardData = async (year?: number, month?: number) => {
+const getDashboardData = async (year?: number) => {
   try {
-    // Build the match criteria based on the year and month provided
-    const matchCriteria: any = { isDeleted: false };
+    console.log(year); // Debugging step to confirm the `year` is passed correctly.
 
-    if (year) {
-      matchCriteria["date"] = {
-        $gte: new Date(`${year}-01-01`),
-        $lt: new Date(`${year + 1}-01-01`),
-      }; // Filter by year
-    }
+    // Use current year if no year is provided
+    const targetYear = year || new Date().getFullYear();
 
-    if (month) {
-      matchCriteria["date"] = {
-        ...matchCriteria["date"],
-        $gte: new Date(`${year}-${month < 10 ? "0" + month : month}-01`),
-        $lt: new Date(`${year}-${month < 10 ? "0" + month : month}-31`),
-      }; // Filter by month
-    }
+    // Initialize the match criteria with the year filter
+    const matchCriteria: any = { isDeleted: false, date: { $ne: null } };
+
+    // Apply year filter
+    matchCriteria["date"] = {
+      $ne: null,
+      $gte: new Date(`${targetYear}-01-01`), // Start of the year
+      $lt: new Date(`${targetYear + 1}-01-01`), // Start of the next year
+    };
 
     // Fetch the monthly session data
     const monthlySessions = await SessionModel.aggregate([
-      { $match: matchCriteria },
+      {
+        $match: matchCriteria,
+      },
       {
         $project: {
           month: { $month: "$date" },
@@ -540,24 +695,70 @@ const getDashboardData = async (year?: number, month?: number) => {
           totalSessions: { $sum: 1 },
         },
       },
-      { $sort: { "_id.year": 1, "_id.month": 1 } },
+      {
+        $sort: { "_id.year": 1, "_id.month": 1 },
+      },
     ]);
 
-    // Get card data: total sessions, total parents, total tutors
-    const totalSessions = await SessionModel.countDocuments({
-      isDeleted: false,
+    // Create an array of all 12 months with sessions as 0
+    const allMonths = Array.from({ length: 12 }, (_, i) => {
+      const monthNumber = i + 1; // 1 to 12
+      const formattedMonth = dayjs()
+        .month(monthNumber - 1)
+        .format("MMM");
+      return {
+        month: formattedMonth,
+        monthNumber: monthNumber,
+        sessions: 0,
+      };
     });
+
+    // Merge the actual session data with all months
+    const result = allMonths.map((monthObj) => {
+      const sessionData = monthlySessions.find(
+        (session) => session._id.month === monthObj.monthNumber,
+      );
+
+      if (sessionData) {
+        return {
+          month: monthObj.month,
+          sessions: sessionData.totalSessions,
+        };
+      }
+
+      return {
+        month: monthObj.month,
+        sessions: 0,
+      };
+    });
+
+    // Get card data: total sessions, total parents, total tutors
+    const totalSessionsMatchCriteria: any = {
+      isDeleted: false,
+      date: { $ne: null },
+    };
+
+    if (year) {
+      totalSessionsMatchCriteria.date = {
+        $gte: new Date(`${targetYear}-01-01`),
+        $lt: new Date(`${targetYear + 1}-01-01`),
+      };
+    }
+
+    const totalSessions = await SessionModel.countDocuments(
+      totalSessionsMatchCriteria,
+    );
     const totalParents = await ParentModel.countDocuments({});
     const totalTutors = await ProfessionalModel.countDocuments({});
 
     return {
-      monthlySessions,
+      monthlySessions: result,
       totalSessions,
       totalParents,
       totalTutors,
     };
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (error) {
+    console.error("Error fetching dashboard data:", error);
     throw new Error("Error fetching dashboard data");
   }
 };

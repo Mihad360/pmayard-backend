@@ -12,9 +12,10 @@ export enum ConversationType {
 export interface IConversation {
   _id?: Types.ObjectId;
   conversationName?: string;
-  type: ConversationType; // "individual" or "group"
-  users: Types.ObjectId[]; // List of users involved in the conversation (for group conversations)
-  lastMsg?: IMessage | Types.ObjectId; // Store the ID of the last message in the conversation
+  type: ConversationType;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  users: Types.ObjectId[] | any; // Allow single user or array
+  lastMsg?: IMessage | Types.ObjectId;
   isDeleted: boolean;
 }
 

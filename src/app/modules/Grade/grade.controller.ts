@@ -26,7 +26,20 @@ const getGrades = catchAsync(async (req, res) => {
   });
 });
 
+const removeGrade = catchAsync(async (req, res) => {
+  const id = req.params.gradeId;
+  const result = await gradeServices.removeGrade(id);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "Events retrieved successfully",
+    data: result,
+  });
+});
+
 export const gradeControllers = {
   addGrade,
   getGrades,
+  removeGrade,
 };

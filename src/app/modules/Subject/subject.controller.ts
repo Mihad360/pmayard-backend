@@ -28,7 +28,20 @@ const getSubjects = catchAsync(async (req, res) => {
   });
 });
 
+const removeSubject = catchAsync(async (req, res) => {
+  const id = req.params.subjectId;
+  const result = await subjectServices.removeSubject(id);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "Events retrieved successfully",
+    data: result,
+  });
+});
+
 export const subjectControllers = {
   addSubject,
   getSubjects,
+  removeSubject,
 };

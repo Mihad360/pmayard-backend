@@ -25,7 +25,20 @@ const getAllEvents = catchAsync(async (req, res) => {
   });
 });
 
+const removeEvent = catchAsync(async (req, res) => {
+  const id = req.params.eventId;
+  const result = await eventServices.removeEvent(id);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "Events retrieved successfully",
+    data: result,
+  });
+});
+
 export const eventControllers = {
   addEvent,
   getAllEvents,
+  removeEvent,
 };

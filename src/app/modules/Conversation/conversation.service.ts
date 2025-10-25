@@ -4,6 +4,7 @@ import { JwtPayload } from "../../interface/global";
 import { ConversationModel } from "./conversation.model";
 import AppError from "../../erros/AppError";
 import { UserModel } from "../User/user.model";
+import { IUser } from "../User/user.interface";
 
 const getMyConversations = async (
   user: JwtPayload,
@@ -37,7 +38,7 @@ const getMyConversations = async (
         const otherUser = await UserModel.findOne({
           $and: [
             { _id: { $ne: userId } }, // Exclude the logged-in user
-            { _id: { $in: conversation.users.map((user) => user._id) } },
+            { _id: { $in: conversation.users.map((user: IUser) => user._id) } },
           ],
         });
 

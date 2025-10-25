@@ -76,7 +76,23 @@ const getMaterials = async (
   return { meta, result };
 };
 
+const removeMaterial = async (eventId: string) => {
+  const isEventExist = await MaterialModel.findById(eventId);
+  if (!isEventExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "material not found");
+  }
+  const result = await MaterialModel.findByIdAndUpdate(
+    isEventExist._id,
+    {
+      isDeleted: true,
+    },
+    { new: true },
+  );
+  return result;
+};
+
 export const materialServices = {
   addMaterial,
   getMaterials,
+  removeMaterial,
 };

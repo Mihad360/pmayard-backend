@@ -29,7 +29,20 @@ const getMaterials = catchAsync(async (req, res) => {
   });
 });
 
+const removeMaterial = catchAsync(async (req, res) => {
+  const id = req.params.materialId;
+  const result = await materialServices.removeMaterial(id);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "Events retrieved successfully",
+    data: result,
+  });
+});
+
 export const materialControllers = {
   addMaterial,
   getMaterials,
+  removeMaterial,
 };

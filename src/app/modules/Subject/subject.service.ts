@@ -37,7 +37,23 @@ const getSubjects = async (id: string, query: Record<string, unknown>) => {
   return { meta, result };
 };
 
+const removeSubject = async (eventId: string) => {
+  const isEventExist = await SubjectModel.findById(eventId);
+  if (!isEventExist) {
+    throw new AppError(HttpStatus.NOT_FOUND, "subject not found");
+  }
+  const result = await SubjectModel.findByIdAndUpdate(
+    isEventExist._id,
+    {
+      isDeleted: true,
+    },
+    { new: true },
+  );
+  return result;
+};
+
 export const subjectServices = {
   addSubject,
   getSubjects,
+  removeSubject,
 };

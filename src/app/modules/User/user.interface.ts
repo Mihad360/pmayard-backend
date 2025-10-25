@@ -13,6 +13,8 @@ export interface IUser {
   roleId?: IProfessional | IParent | Types.ObjectId; // roleId can either be populated (IRole) or an ObjectId reference
   email: string;
   password: string;
+  name?: string;
+  profileImage?: string;
   role?: "professional" | "parent" | "admin";
   roleRef?: "Professional" | "Parent" | "Admin";
   isActive?: boolean;

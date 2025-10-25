@@ -10,6 +10,7 @@ import config from "../config";
 import { UserModel } from "../modules/User/user.model";
 import { NotificationModel } from "../modules/Notification/notification.model";
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const app: Application = express();
 
 declare module "socket.io" {
@@ -28,6 +29,7 @@ let io: SocketIOServer;
 export const connectedUsers = new Map<string, { socketID: string }>();
 export const connectedClients = new Map<string, Socket>();
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const sendResponse = (
   statusCode: number,
   status: string,

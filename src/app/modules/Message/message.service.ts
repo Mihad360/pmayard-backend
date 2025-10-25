@@ -7,7 +7,7 @@ import mongoose, { Types } from "mongoose";
 import { ConversationModel } from "../Conversation/conversation.model";
 import { JwtPayload } from "../../interface/global";
 import { UserModel } from "../User/user.model";
-import { IUserWithPopulatedRole } from "../User/user.interface";
+import { IUser, IUserWithPopulatedRole } from "../User/user.interface";
 import { emitMessageData } from "../../utils/socket";
 import { IConversationWithUsers } from "../Conversation/conversation.interface";
 
@@ -167,7 +167,7 @@ const getMessages = async (conversationId: string, user: JwtPayload) => {
       const oppositeUserId = await UserModel.findOne({
         $and: [
           { _id: { $ne: isUserExist._id } }, // Exclude the logged-in user
-          { _id: { $in: conversation.users.map((user) => user._id) } }, // Ensure the user is part of the conversation
+          { _id: { $in: conversation.users.map((user: IUser) => user._id) } }, // Ensure the user is part of the conversation
         ],
       }).session(session);
 
@@ -178,7 +178,7 @@ const getMessages = async (conversationId: string, user: JwtPayload) => {
       const oppositeUser = (await UserModel.findOne({
         $and: [
           { _id: { $ne: isUserExist._id } }, // Exclude the logged-in user
-          { _id: { $in: conversation.users.map((user) => user._id) } }, // Ensure the user is part of the conversation
+          { _id: { $in: conversation.users.map((user: IUser) => user._id) } }, // Ensure the user is part of the conversation
         ],
       })
         .populate({
@@ -268,13 +268,15 @@ const getMessages = async (conversationId: string, user: JwtPayload) => {
         conversation_id: populatedGroupConversation._id,
       })
         .sort({ createdAt: -1 })
+        .populate({ path: "sender_id", select: "email roleId role" })
         .populate({ path: "attachment_id", select: "fileUrl mimeType" })
         .session(session);
 
       // Format the messages
       const formattedMessages = messages.map((message: any) => {
         const sender = populatedGroupConversation.users.find(
-          (user) => user._id.toString() === message.sender_id.toString(),
+          (user: IUser) =>
+            user._id?.toString() === message.sender_id.toString(),
         ) as Partial<IUserWithPopulatedRole>;
 
         return {

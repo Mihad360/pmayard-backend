@@ -14,5 +14,10 @@ router.get(
   auth("admin", "professional"),
   subjectControllers.getSubjects,
 );
+router.delete(
+  "/:subjectId",
+  auth("admin", "professional"),
+  subjectControllers.removeSubject,
+);
 
 export const SubjectRoutes = router;

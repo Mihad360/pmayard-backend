@@ -24,9 +24,7 @@ const getAllProfessionals = catchAsync(async (req, res) => {
     statusCode: HttpStatus.OK,
     success: true,
     message: "Professionals retrieved successfully",
-    meta: result.meta,
-    sessions: result.sessions,
-    data: result.result,
+    data: result,
   });
 });
 
@@ -123,7 +121,11 @@ const removeSession = catchAsync(async (req, res) => {
 });
 
 const getDashboardData = catchAsync(async (req, res) => {
-  const result = await adminServices.getDashboardData();
+  const { year } = req.query;
+
+  // Ensure 'year' is passed as a number if it's present
+  const parsedYear = year ? parseInt(year as string, 10) : undefined;
+  const result = await adminServices.getDashboardData(parsedYear);
 
   sendResponse(res, {
     statusCode: HttpStatus.OK,

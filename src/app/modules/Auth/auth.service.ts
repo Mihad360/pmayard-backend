@@ -13,7 +13,7 @@ import { Types } from "mongoose";
 import { IUserWithPopulatedRole } from "../User/user.interface";
 
 const loginUser = async (payload: IAuth) => {
-  // Find user by email
+  // Find the user by email
   const user = await UserModel.findOne({
     email: payload.email,
   });
@@ -25,50 +25,24 @@ const loginUser = async (payload: IAuth) => {
 
   // Check if user is deleted
   if (user?.isDeleted) {
-    throw new AppError(HttpStatus.BAD_REQUEST, "The user is already Blocked");
+    throw new AppError(HttpStatus.BAD_REQUEST, "The user is blocked");
+  }
+
+  // Check if the user is verified
+  if (!user.isVerified) {
+    throw new AppError(HttpStatus.FORBIDDEN, "You are not verified");
   }
 
   // Compare password
   if (!(await UserModel.compareUserPassword(payload.password, user.password))) {
-    throw new AppError(HttpStatus.FORBIDDEN, "Password did not matched");
+    throw new AppError(HttpStatus.FORBIDDEN, "Password did not match");
   }
 
-  // If user is not verified, send OTP
-  if (!user.isVerified) {
-    const otp = generateOtp();
-    const expireAt = new Date(Date.now() + 5 * 60 * 1000);
-
-    // Update user with OTP and expiration time
-    const updateUser = await UserModel.findOneAndUpdate(
-      { email: user.email },
-      {
-        otp: otp,
-        expiresAt: expireAt,
-      },
-      { new: true },
-    );
-
-    if (updateUser) {
-      const subject = "Verification Code";
-      const mail = await sendEmail(
-        user.email,
-        subject,
-        verificationEmailTemplate(user.email, otp as string),
-      );
-      if (!mail) {
-        throw new AppError(HttpStatus.BAD_REQUEST, "Something went wrong!");
-      }
-      return {
-        message: "OTP has been sent to your email. Please verify to continue.",
-      };
-    }
-  }
-
-  // If user is already verified, generate and return tokens
+  // Generate and return tokens
   const userId = user?._id;
 
   if (!userId) {
-    throw new AppError(HttpStatus.NOT_FOUND, "The user id is missing");
+    throw new AppError(HttpStatus.NOT_FOUND, "User id is missing");
   }
 
   const jwtPayload: JwtPayload = {
