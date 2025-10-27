@@ -5,6 +5,7 @@ import AppError from "../../erros/AppError";
 import { UserModel } from "../User/user.model";
 import { JwtPayload } from "../../interface/global";
 import { ClientSession, Types } from "mongoose";
+import QueryBuilder from "../../../builder/QueryBuilder";
 
 export const createNotification = async (
   payload: INotification,
@@ -32,7 +33,10 @@ export const createNotification = async (
   }
 };
 
-const getMyNotifications = async (user: JwtPayload) => {
+const getMyNotifications = async (
+  user: JwtPayload,
+  query: Record<string, unknown>,
+) => {
   const userId = new Types.ObjectId(user.user);
 
   // Check if user exists
@@ -41,38 +45,55 @@ const getMyNotifications = async (user: JwtPayload) => {
     throw new AppError(HttpStatus.NOT_FOUND, "User not found");
   }
 
-  let notifications;
+  let notificationQuery;
 
   // Conditional logic based on user role
   if (user.role === "admin") {
     // Admin: Fetch user login notifications
-    notifications = await NotificationModel.find({
+    notificationQuery = NotificationModel.find({
       type: { $in: ["user_registration", "user_login", "user_join"] },
-    })
-      .sort({ createdAt: -1 })
-      .populate({ path: "sender", select: "name" });
+    }).populate({ path: "sender", select: "name" });
   } else if (user.role === "professional") {
-    // Teacher: Fetch trip join notifications
-    notifications = await NotificationModel.find({
+    // Professional: Fetch parent_assigned notifications
+    notificationQuery = NotificationModel.find({
       recipient: userId,
       type: "parent_assigned",
-    }).sort({ createdAt: -1 });
+    });
   } else if (user.role === "parent") {
-    // Participant: Fetch trip reminder notifications
-    notifications = await NotificationModel.find({
+    // Parent: Fetch tutor_assigned notifications
+    notificationQuery = NotificationModel.find({
       recipient: userId,
       type: "tutor_assigned",
-    }).sort({ createdAt: -1 });
+    });
   } else {
     // Invalid role
     throw new AppError(HttpStatus.FORBIDDEN, "Invalid role");
   }
 
-  if (!notifications || notifications.length === 0) {
-    throw new AppError(HttpStatus.NOT_FOUND, "The notification not available");
+  // Apply QueryBuilder for filtering, sorting, pagination
+  const notifications = new QueryBuilder(
+    notificationQuery.sort({ createdAt: -1 }),
+    query,
+  )
+    .filter()
+    .paginate()
+    .fields()
+    .sort();
+
+  // Check if notifications exist
+  if (!notifications) {
+    throw new AppError(HttpStatus.NOT_FOUND, "Notifications not found");
   }
 
-  return notifications;
+  // Get metadata and results
+  const meta = await notifications.countTotal();
+  const result = await notifications.modelQuery;
+
+  if (!result || result.length === 0) {
+    throw new AppError(HttpStatus.NOT_FOUND, "No notifications available");
+  }
+
+  return { meta, result };
 };
 
 const updateNotification = async (id: string) => {

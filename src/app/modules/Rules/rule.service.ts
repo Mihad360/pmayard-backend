@@ -8,7 +8,7 @@ const updatePrivacyById = async (id: string, payload: Partial<IPrivacy>) => {
     const updatedPrivacy = await PrivacyModel.findByIdAndUpdate(
       id,
       payload,
-      { new: true, upsert: true }, // Returns the updated document
+      { new: true }, // Returns the updated document
     );
 
     if (!updatedPrivacy) {
@@ -41,7 +41,7 @@ const updateAboutUsById = async (id: string, payload: Partial<IAboutUs>) => {
     const updatedAboutUs = await AboutUsModel.findByIdAndUpdate(
       id,
       payload,
-      { new: true, upsert: true }, // Returns the updated document
+      { new: true }, // Returns the updated document
     );
 
     if (!updatedAboutUs) {
@@ -53,8 +53,24 @@ const updateAboutUsById = async (id: string, payload: Partial<IAboutUs>) => {
   }
 };
 
+const getPrivacy = async () => {
+  const result = await PrivacyModel.find();
+  return result;
+};
+const getTerms = async () => {
+  const result = await TermsModel.find();
+  return result;
+};
+const getAboutUs = async () => {
+  const result = await AboutUsModel.find();
+  return result;
+};
+
 export const ruleServices = {
   updateAboutUsById,
   updatePrivacyById,
   updateTermsById,
+  getPrivacy,
+  getTerms,
+  getAboutUs,
 };

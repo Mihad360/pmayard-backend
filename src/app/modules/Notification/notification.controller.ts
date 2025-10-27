@@ -18,7 +18,7 @@ const updateNotification = catchAsync(async (req, res) => {
 
 const getMyNotifications = catchAsync(async (req, res) => {
   const user = req.user as JwtPayload;
-  const result = await notificationServices.getMyNotifications(user);
+  const result = await notificationServices.getMyNotifications(user, req.query);
 
   sendResponse(res, {
     statusCode: HttpStatus.OK,

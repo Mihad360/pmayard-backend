@@ -5,7 +5,6 @@ const privacySchema = new Schema<IPrivacy>(
   {
     title: {
       type: String,
-      required: true,
     },
     content: {
       type: String,
@@ -19,7 +18,6 @@ const termsSchema = new Schema<ITerms>(
   {
     title: {
       type: String,
-      required: true,
     },
     content: {
       type: String,
@@ -33,7 +31,6 @@ const aboutUsSchema = new Schema<IAboutUs>(
   {
     title: {
       type: String,
-      required: true,
     },
     content: {
       type: String,

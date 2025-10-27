@@ -33,7 +33,7 @@ const removeGrade = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: HttpStatus.OK,
     success: true,
-    message: "Events retrieved successfully",
+    message: "Grade removed successfully",
     data: result,
   });
 });
