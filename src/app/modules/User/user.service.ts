@@ -38,7 +38,7 @@ const registerUser = async (payload: IUser) => {
         expiresAt: expireAt,
       },
       { new: true },
-    );
+    ).select("-password -otp -passwordChangedAt");
 
     if (updatedUser) {
       // Send OTP via email
@@ -65,8 +65,7 @@ const registerUser = async (payload: IUser) => {
       await createNotification(notInfo);
 
       return {
-        message:
-          "User registered successfully. Please verify your email using the OTP sent.",
+        data: updatedUser,
       };
     }
   }

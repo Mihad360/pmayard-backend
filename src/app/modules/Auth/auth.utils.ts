@@ -21,7 +21,12 @@ export const verificationEmailTemplate = (email: string, otp: string) => {
 export const checkOtp = async (email: string, otp: string) => {
   const otpUser = await UserModel.findOne({ email: email });
   if (otpUser && otpUser.otp !== otp) {
-    throw new AppError(HttpStatus.BAD_REQUEST, "The otp is invalid!");
+    await UserModel.findOneAndDelete({ email: email });
+
+    throw new AppError(
+      HttpStatus.BAD_REQUEST,
+      "Invalid OTP. User has been removed. Please register again!",
+    );
   }
   const updateUser = await UserModel.findOneAndUpdate(
     { email: email },

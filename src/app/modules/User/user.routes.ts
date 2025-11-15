@@ -26,7 +26,6 @@ router.patch(
 );
 router.post(
   "/register",
-  auth("admin"),
   validateRequest(userValidationSchema),
   userControllers.registerUser,
 );

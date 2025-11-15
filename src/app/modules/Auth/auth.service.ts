@@ -114,33 +114,32 @@ const verifyOtp = async (payload: { email: string; otp: string }) => {
   });
 
   if (!user) {
-    throw new AppError(HttpStatus.NOT_FOUND, "This User is not exist");
+    throw new AppError(HttpStatus.NOT_FOUND, "This User does not exist");
   }
+
   if (user?.isDeleted) {
     throw new AppError(HttpStatus.FORBIDDEN, "This User is deleted");
   }
 
+  // 🕒 Check OTP expiration
   if (user.expiresAt && new Date(user.expiresAt) < new Date()) {
-    await UserModel.findOneAndUpdate(
-      { email: user.email },
-      {
-        otp: null,
-        expiresAt: null,
-        isVerified: false,
-      },
-      { new: true },
-    );
-    throw new AppError(
-      HttpStatus.BAD_REQUEST,
-      "The Otp has expired. Try again!",
-    );
+    // OTP expired — delete the user
+    const deleteUser = await UserModel.findOneAndDelete({ email: user.email });
+    if (deleteUser) {
+      throw new AppError(
+        HttpStatus.BAD_REQUEST,
+        "The OTP has expired. User has been removed. Please register again!",
+      );
+    }
   }
+
   const check = await checkOtp(payload.email, payload.otp);
+
   if (check) {
     const jwtPayload: JwtPayload = {
       user: user._id,
-      email: user?.email,
-      role: user?.role,
+      email: user.email,
+      role: user.role,
     };
 
     const accessToken = createToken(
@@ -148,9 +147,16 @@ const verifyOtp = async (payload: { email: string; otp: string }) => {
       config.jwt_access_secret as string,
       "5m",
     );
+
     return { accessToken };
   } else {
-    throw new AppError(HttpStatus.BAD_REQUEST, "Something went wrong");
+    // ❌ OTP invalid — delete the user as well
+    await UserModel.findOneAndDelete({ email: user.email });
+
+    throw new AppError(
+      HttpStatus.BAD_REQUEST,
+      "Invalid OTP. User has been removed. Please register again!",
+    );
   }
 };
 
@@ -328,7 +334,7 @@ const resendOtp = async (email: string) => {
     const mail = await sendEmail(
       user.email,
       subject,
-      verificationEmailTemplate(updatedUser.roleId.name as string, otp),
+      verificationEmailTemplate(updatedUser.email as string, otp),
     );
     if (!mail) {
       throw new AppError(
@@ -336,7 +342,7 @@ const resendOtp = async (email: string) => {
         "Something went wrong while sending the email!",
       );
     }
-    return updatedUser;
+    return { message: "New otp sent to your email", data: updatedUser };
   }
 };
 
