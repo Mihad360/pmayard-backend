@@ -366,10 +366,16 @@ const createRole = async (
   }
 };
 
+const removeUser = async (id: string) => {
+  const result = await UserModel.findByIdAndDelete(id);
+  return result;
+};
+
 export const userServices = {
   registerUser,
   getMe,
   editUserProfile,
   deleteUser,
   createRole,
+  removeUser,
 };

@@ -68,7 +68,7 @@ const createParent = async (
       // Step 6: Update the user with the parent role
       await UserModel.findByIdAndUpdate(
         isUserExist._id,
-        { roleId: createdParent[0]._id, roleRef: "Parent" },
+        { roleId: createdParent[0]._id, roleRef: "Parent", isActive: true },
         { new: true, session },
       );
 
@@ -190,21 +190,18 @@ const verifySessionByCode = async (
     },
   );
 
-  // Step 6: Create an individual conversation between the Parent and the Professional
-  const individualConversation = new ConversationModel({
-    type: ConversationType.INDIVIDUAL,
-    users: [isParentExist.user, isProfessionalExist.user], // Parent and Professional as users
-    isDeleted: false,
-  });
+  // // Step 6: Create an individual conversation between the Parent and the Professional
+  // const individualConversation = new ConversationModel({
+  //   type: ConversationType.INDIVIDUAL,
+  //   users: [isParentExist.user, isProfessionalExist.user], // Parent and Professional as users
+  //   isDeleted: false,
+  // });
 
-  // Save the conversation
-  const savedConversation = await individualConversation.save();
+  // // Save the conversation
+  // const savedConversation = await individualConversation.save();
 
   // Return the updated session and conversation details
-  return {
-    verifySession,
-    individualConversation: savedConversation,
-  };
+  return verifySession;
 };
 
 const getEachParent = async (id: string) => {
@@ -218,24 +215,49 @@ const getEachParent = async (id: string) => {
   return isSessionExist;
 };
 
-const getAssignedProfessionals = async (user: JwtPayload) => {
+const getAssignedProfiles = async (user: JwtPayload) => {
   const userId = new Types.ObjectId(user.user);
   const isUserExist = await UserModel.findById(userId);
+
   if (!isUserExist) {
     throw new AppError(HttpStatus.NOT_FOUND, "User not found");
   }
-  const session = await SessionModel.find({
-    parent: isUserExist.roleId,
-    isDeleted: false,
-    // status: "Upcoming",
-  })
-    .select("-day -date -time -subject -status -code -isSessionVerified")
-    .populate({
+
+  let filter = {};
+  let populateConfig: any = {};
+
+  // 👉 Check role
+  if (isUserExist.role === "parent") {
+    // Parent → get assigned professionals
+    filter = { parent: isUserExist.roleId, isDeleted: false };
+    populateConfig = {
       path: "professional",
-    });
-  if (!session) {
-    throw new AppError(HttpStatus.NOT_FOUND, "session not found");
+      select: "-availability",
+      populate: { path: "user", select: "email role" },
+    };
+  } else if (isUserExist.role === "professional") {
+    // Professional → get assigned parents
+    filter = { professional: isUserExist.roleId, isDeleted: false };
+    populateConfig = {
+      path: "parent",
+      populate: { path: "user", select: "email role" },
+    };
+  } else {
+    throw new AppError(
+      HttpStatus.BAD_REQUEST,
+      "Invalid role. Only parent or professional allowed",
+    );
   }
+
+  // 👉 Query
+  const session = await SessionModel.find(filter)
+    .select("-day -date -time -subject -status -code -isSessionVerified")
+    .populate(populateConfig);
+
+  if (!session) {
+    throw new AppError(HttpStatus.NOT_FOUND, "Session not found");
+  }
+
   return session;
 };
 
@@ -274,6 +296,6 @@ export const parentServices = {
   createParent,
   verifySessionByCode,
   getEachParent,
-  getAssignedProfessionals,
+  getAssignedProfiles,
   getUpcomingProfessionalSessions,
 };

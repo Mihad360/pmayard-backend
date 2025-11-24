@@ -3,6 +3,7 @@ import { Types } from "mongoose";
 export interface ISession {
   parent?: Types.ObjectId; // ObjectId for the parent (assuming it's a reference to another collection)
   professional?: Types.ObjectId; // ObjectId for the professional (another reference)
+  conversation_id: Types.ObjectId;
   day?: string; // Enum of days (e.g., 'Monday', 'Tuesday', etc.)
   date?: Date; // The date of the session
   time?: {

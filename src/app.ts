@@ -10,11 +10,7 @@ const app: Application = express();
 app.use(express.json());
 app.use(
   cors({
-    origin:
-      // "https://tutor-application-dashboard.vercel.app",
-      // "http://localhost:5173",
-      true,
-    // ],
+    origin: "*",
     credentials: true,
   }),
 );
@@ -22,12 +18,12 @@ app.use(cookieParser());
 
 app.use("/api/v1", router);
 
-// const test = async (req: Request, res: Response) => {
-//   const a = 10;
-//   res.send(a);
-// };
+const test = async (req: Request, res: Response) => {
+  const a = 10;
+  res.send(a);
+};
 
-// app.get("/", test);
+app.get("/", test);
 
 app.use(globalErrorHandler);
 app.use(notFound);

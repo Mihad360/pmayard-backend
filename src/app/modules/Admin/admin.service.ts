@@ -13,6 +13,8 @@ import { SessionModel } from "../Session/session.model";
 import dayjs from "dayjs";
 import { INotification } from "../Notification/notification.interface";
 import { createNotification } from "../Notification/notification.service";
+import { ConversationModel } from "../Conversation/conversation.model";
+import { ConversationType } from "../Conversation/conversation.interface";
 
 const getAllParents = async (
   user: JwtPayload,
@@ -464,6 +466,30 @@ const assignProfessionalAndSetCode = async (
       throw new AppError(HttpStatus.NOT_FOUND, "Professional not found");
     }
 
+    // Get userIds of parent and professional
+    const parentUserId = isParentExist.user; // ObjectId of User
+    const professionalUserId = isProfessionalExist.user;
+
+    // Check if conversation already exists between them
+    let conversation = await ConversationModel.findOne({
+      users: { $all: [parentUserId, professionalUserId] },
+      type: "individual",
+    }).session(session);
+    if (!conversation) {
+      const created = await ConversationModel.create(
+        [
+          {
+            type: ConversationType.INDIVIDUAL,
+            users: [parentUserId, professionalUserId],
+            isDeleted: false,
+          },
+        ],
+        { session },
+      );
+      conversation = created[0];
+    }
+    payload.conversation_id = conversation._id;
+
     // Check if Professional has available time slots
     const availability = isProfessionalExist.availability;
     const isAvailable = availability.some((avail) =>
@@ -497,7 +523,7 @@ const assignProfessionalAndSetCode = async (
       { code: payload.code },
       { new: true, session },
     );
-    console.log(updatedSession);
+
     if (updatedSession) {
       // Send assignment email for both professional and parent
       const senderId = new Types.ObjectId(userId);

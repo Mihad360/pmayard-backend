@@ -7,6 +7,16 @@ import { sessionStatusValidationSchema } from "./session.validation";
 const router = express.Router();
 
 router.get(
+  "/upcoming-sessions",
+  auth("professional", "parent"),
+  sessionControllers.getUpcomingSessions,
+);
+router.get(
+  "/assigned-roles",
+  auth("parent", "professional"),
+  sessionControllers.getAssignedProfiles,
+);
+router.get(
   "/my-sessions",
   auth("parent", "professional"),
   sessionControllers.getMySessions,

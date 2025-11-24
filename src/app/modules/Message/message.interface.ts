@@ -10,7 +10,8 @@ export interface IMessage extends Document {
   attachment_id?: IAttachment | Types.ObjectId[] | string[];
   message_text: string;
   last_msg: Types.ObjectId;
-  message_type: "text" | "attachments";
+  is_read: boolean;
+  message_type: "text" | "attachments" | "audio";
   isDeleted: boolean;
 }
 

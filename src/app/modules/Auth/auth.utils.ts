@@ -19,17 +19,24 @@ export const verificationEmailTemplate = (email: string, otp: string) => {
 };
 
 export const checkOtp = async (email: string, otp: string) => {
-  const otpUser = await UserModel.findOne({ email: email });
-  if (otpUser && otpUser.otp !== otp) {
-    await UserModel.findOneAndDelete({ email: email });
+  // Find user
+  const otpUser = await UserModel.findOne({ email });
+  if (!otpUser) {
+    throw new AppError(HttpStatus.NOT_FOUND, "User not found");
+  }
 
+  // Validate OTP
+  if (otpUser.otp !== otp) {
+    // Just throw error. Do NOT delete user.
     throw new AppError(
       HttpStatus.BAD_REQUEST,
-      "Invalid OTP. User has been removed. Please register again!",
+      "Invalid OTP. Please try again.",
     );
   }
+
+  // OTP correct → verify user
   const updateUser = await UserModel.findOneAndUpdate(
-    { email: email },
+    { email },
     {
       otp: null,
       expiresAt: null,
@@ -37,5 +44,6 @@ export const checkOtp = async (email: string, otp: string) => {
     },
     { new: true },
   ).select("-password");
+
   return updateUser;
 };

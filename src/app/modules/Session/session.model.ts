@@ -8,6 +8,7 @@ const sessionSchema = new Schema<ISession>(
       type: Schema.Types.ObjectId,
       ref: "Professional",
     },
+    conversation_id: { type: Schema.Types.ObjectId, ref: "Conversation" },
     day: {
       type: String,
       enum: [

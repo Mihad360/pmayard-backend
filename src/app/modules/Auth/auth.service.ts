@@ -13,33 +13,42 @@ import mongoose, { Types } from "mongoose";
 import { IUserWithPopulatedRole } from "../User/user.interface";
 
 const loginUser = async (payload: IAuth) => {
-  // Find the user by email
   const user = await UserModel.findOne({
     email: payload.email,
-  });
+  }).select("-passwordChangedAt");
 
-  // Check if user exists
   if (!user) {
     throw new AppError(HttpStatus.NOT_FOUND, "The user is not found");
   }
 
-  // Check if user is deleted
   if (user?.isDeleted) {
     throw new AppError(HttpStatus.BAD_REQUEST, "The user is blocked");
   }
 
-  // Check if the user is verified
   if (!user.isVerified) {
-    throw new AppError(HttpStatus.FORBIDDEN, "You are not verified");
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    user.otp = otp;
+    await user.save();
+
+    const subject = "Verify your account";
+    await sendEmail(
+      user.email,
+      subject,
+      verificationEmailTemplate(user.email, otp),
+    );
+
+    return {
+      message: "You are not verified. A new verification email has been sent.",
+      user: user,
+    };
   }
 
-  // Compare password
   if (!(await UserModel.compareUserPassword(payload.password, user.password))) {
     throw new AppError(HttpStatus.FORBIDDEN, "Password did not match");
   }
 
-  // Generate and return tokens
-  const userId = user?._id;
+  const userId = user._id;
 
   if (!userId) {
     throw new AppError(HttpStatus.NOT_FOUND, "User id is missing");
@@ -47,8 +56,8 @@ const loginUser = async (payload: IAuth) => {
 
   const jwtPayload: JwtPayload = {
     user: userId,
-    email: user?.email,
-    role: user?.role,
+    email: user.email,
+    role: user.role,
   };
 
   const accessToken = createToken(
@@ -61,6 +70,7 @@ const loginUser = async (payload: IAuth) => {
     _id: user._id,
     role: user.role,
     accessToken,
+    user,
   };
 };
 
@@ -137,9 +147,9 @@ const verifyOtp = async (payload: { email: string; otp: string }) => {
 
   if (check) {
     const jwtPayload: JwtPayload = {
-      user: user._id,
-      email: user.email,
-      role: user.role,
+      user: check._id,
+      email: check.email,
+      role: check.role,
     };
 
     const accessToken = createToken(
@@ -148,16 +158,17 @@ const verifyOtp = async (payload: { email: string; otp: string }) => {
       "5m",
     );
 
-    return { accessToken };
-  } else {
-    // ❌ OTP invalid — delete the user as well
-    await UserModel.findOneAndDelete({ email: user.email });
-
-    throw new AppError(
-      HttpStatus.BAD_REQUEST,
-      "Invalid OTP. User has been removed. Please register again!",
-    );
+    return { accessToken, email: check.email };
   }
+  // else {
+  //   // ❌ OTP invalid — delete the user as well
+  //   await UserModel.findOneAndDelete({ email: user.email });
+
+  //   throw new AppError(
+  //     HttpStatus.BAD_REQUEST,
+  //     "Invalid OTP. User has been removed. Please register again!",
+  //   );
+  // }
 };
 
 const resetPassword = async (
@@ -198,9 +209,9 @@ const resetPassword = async (
   );
   if (updateUser) {
     const jwtPayload: JwtPayload = {
-      user: user._id,
-      email: user?.email,
-      role: user?.role,
+      user: updateUser._id,
+      email: updateUser?.email,
+      role: updateUser?.role,
     };
 
     const accessToken = createToken(
@@ -260,7 +271,7 @@ const changePassword = async (
         passwordChangedAt: new Date(),
       },
       { new: true, session },
-    );
+    ).select("-password -otp -passwordChangedAt");
 
     if (!result) {
       throw new AppError(HttpStatus.UNAUTHORIZED, "Something went wrong");
@@ -273,7 +284,7 @@ const changePassword = async (
     await new Promise((resolve) => setTimeout(resolve, 2500));
 
     const jwtPayload: JwtPayload = {
-      user: userId,
+      user: result._id,
       email: result?.email,
       role: result?.role,
     };
@@ -290,7 +301,7 @@ const changePassword = async (
       config.jwt_refresh_expires_in as string,
     );
 
-    return { accessToken, refreshToken };
+    return { accessToken, refreshToken, user: result };
   } catch (error) {
     await session.abortTransaction();
     throw error;

@@ -76,7 +76,11 @@ const createProfessional = async (
       // Step 6: Update the user with the professional role
       await UserModel.findByIdAndUpdate(
         isUserExist._id,
-        { roleId: createdProfessional[0]._id, roleRef: "Professional" },
+        {
+          roleId: createdProfessional[0]._id,
+          roleRef: "Professional",
+          isActive: true,
+        },
         { new: true, session },
       );
 

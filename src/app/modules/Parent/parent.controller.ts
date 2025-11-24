@@ -41,9 +41,9 @@ const getEachParent = catchAsync(async (req, res) => {
   });
 });
 
-const getAssignedProfessionals = catchAsync(async (req, res) => {
+const getAssignedProfiles = catchAsync(async (req, res) => {
   const user = req.user as JwtPayload;
-  const result = await parentServices.getAssignedProfessionals(user);
+  const result = await parentServices.getAssignedProfiles(user);
 
   sendResponse(res, {
     statusCode: HttpStatus.OK,
@@ -73,6 +73,6 @@ export const parentControllers = {
   createParent,
   verifySessionByCode,
   getEachParent,
-  getAssignedProfessionals,
+  getAssignedProfiles,
   getUpcomingProfessionalSessions,
 };

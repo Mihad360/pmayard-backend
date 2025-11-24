@@ -236,12 +236,14 @@ export const emitMessageData = ({
   conversationId: string;
   senderId: string;
   messageContent?: string;
-  attachment?: {
-    id: string;
-    fileUrl: string;
-    mimeType: string;
-    fileName: string;
-  }[];
+  attachment?:
+    | {
+        id: string;
+        fileUrl: string;
+        mimeType: string;
+        fileName: string;
+      }[]
+    | null;
   messageType: string;
 }) => {
   if (!io) {
@@ -251,14 +253,13 @@ export const emitMessageData = ({
   // Base message object (same for everyone)
   const message = {
     sender_id: senderId,
-    lastMessage: messageContent ? messageContent : "",
-    attachment: attachment ? attachment : "",
+    lastMessage: messageContent ? messageContent : null,
+    attachment: attachment ? attachment : null,
     message_type: messageType,
     timestamp: new Date().toISOString(),
   };
 
   if (message) {
-    // Create personalized data for THIS specific recipient
     const personalizedData = {
       conversationId,
       message,

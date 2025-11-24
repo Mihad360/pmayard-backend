@@ -12,7 +12,7 @@ cloudinary.config({
   api_secret: config.cloudinary_api_secret,
 });
 
-// Function to upload files (image, PDF, Word)
+// Upload Function
 export const sendFileToCloudinary = (
   fileBuffer: Buffer,
   fileName: string,
@@ -22,93 +22,85 @@ export const sendFileToCloudinary = (
     if (!fileBuffer) return reject(new Error("Missing file buffer"));
     if (!mimetype) return reject(new Error("Missing mimetype"));
 
-    // Strip extension from the file name
     const nameWithoutExt = path.parse(fileName).name;
 
+    // ============================
+    // 1️⃣ IMAGE Upload
+    // ============================
     if (mimetype.startsWith("image/")) {
-      if (Buffer.isBuffer(fileBuffer)) {
-        const base64Image = fileBuffer.toString("base64"); // Buffer to base64
-        const dataUri = `data:${mimetype};base64,${base64Image}`;
+      const base64Image = fileBuffer.toString("base64");
+      const dataUri = `data:${mimetype};base64,${base64Image}`;
 
-        // Upload image to Cloudinary
-        cloudinary.uploader.upload(
-          dataUri,
-          {
-            public_id: nameWithoutExt,
-            resource_type: "image",
-            type: "upload",
-          },
-          (error, result) => {
-            if (error) return reject(error);
-            if (!result) return reject(new Error("No result from Cloudinary"));
-            resolve(result);
-          },
-        );
-      } else {
-        reject(new Error("Expected a buffer for image upload"));
-      }
+      cloudinary.uploader.upload(
+        dataUri,
+        {
+          public_id: nameWithoutExt,
+          resource_type: "image",
+          type: "upload",
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          if (!result) return reject(new Error("No result"));
+          resolve(result);
+        },
+      );
     }
-    // Handle PDF and Word files (raw files)
+
+    // ============================
+    // 2️⃣ PDF + WORD Uploads (raw)
+    // ============================
     else if (
       mimetype === "application/pdf" ||
       mimetype === "application/msword" ||
       mimetype ===
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ) {
-      if (Buffer.isBuffer(fileBuffer)) {
-        // Use upload_stream for raw files (accepts Buffer)
-        const uploadStream = cloudinary.uploader.upload_stream(
-          {
-            public_id: fileName,
-            resource_type: "raw",
-            type: "upload",
-          },
-          (error, result) => {
-            if (error) return reject(error);
-            if (!result) return reject(new Error("No result from Cloudinary"));
-            resolve(result);
-          },
-        );
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          public_id: fileName,
+          resource_type: "raw",
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          if (!result) return reject(new Error("No result"));
+          resolve(result);
+        },
+      );
+      uploadStream.end(fileBuffer);
+    }
 
-        // Write the buffer to the upload stream
-        uploadStream.end(fileBuffer);
-      } else {
-        reject(new Error("Expected a buffer for PDF/Word upload"));
-      }
-    } else {
-      reject(new Error("Unsupported file type"));
+    // ============================
+    // 3️⃣ AUDIO Upload (mp3, wav, webm, m4a, ogg etc.)
+    // Cloudinary requires audio under resource_type: "video"
+    // ============================
+    else if (mimetype.startsWith("audio/")) {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          public_id: nameWithoutExt,
+          resource_type: "video", // REQUIRED for audio files
+          type: "upload",
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          if (!result) return reject(new Error("No result"));
+          resolve(result);
+        },
+      );
+      uploadStream.end(fileBuffer);
+    }
+
+    // ============================
+    // ❌ Unsupported file
+    // ============================
+    else {
+      return reject(new Error("Unsupported file type"));
     }
   });
 };
 
-// Multer memory storage
+// Multer memory storage for receiving files
 const storage: StorageEngine = multer.memoryStorage();
 
-// Filter function to allow only images, PDFs, and Word files
-// const fileFilter = (req: any, file: Express.Multer.File, cb: Function) => {
-//   const allowedMimeTypes = [
-//     "image/jpeg",
-//     "image/png",
-//     "image/gif",
-//     "application/pdf",
-//     "application/msword",
-//     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-//   ];
-
-//   if (!allowedMimeTypes.includes(file.mimetype)) {
-//     cb(
-//       new Error(
-//         "Invalid file type. Only images, PDFs, and Word documents are allowed.",
-//       ),
-//       false,
-//     );
-//   } else {
-//     cb(null, true);
-//   }
-// };
-
-// Multer upload configuration
 export const upload = multer({
   storage,
-  // fileFilter,
 });

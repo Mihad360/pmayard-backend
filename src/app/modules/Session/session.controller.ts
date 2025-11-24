@@ -6,7 +6,7 @@ import catchAsync from "../../utils/catchAsync";
 
 const getMySessions = catchAsync(async (req, res) => {
   const user = req.user as JwtPayload;
-  const result = await sessionServices.getMySessions(user);
+  const result = await sessionServices.getMySessions(user, req.query);
 
   sendResponse(res, {
     statusCode: HttpStatus.OK,
@@ -40,8 +40,35 @@ const getEachSession = catchAsync(async (req, res) => {
   });
 });
 
+const getAssignedProfiles = catchAsync(async (req, res) => {
+  const user = req.user as JwtPayload;
+  const result = await sessionServices.getAssignedProfiles(user);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "Assigned professionals retrieved successfully",
+    data: result,
+  });
+});
+
+const getUpcomingSessions = catchAsync(async (req, res) => {
+  const user = req.user as JwtPayload;
+  const result = await sessionServices.getUpcomingSessions(user, req.query);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "Upcoming parent sessions retrieved successfully",
+    meta: result.meta,
+    data: result.result,
+  });
+});
+
 export const sessionControllers = {
   getMySessions,
   updateSessionStatus,
   getEachSession,
+  getAssignedProfiles,
+  getUpcomingSessions,
 };

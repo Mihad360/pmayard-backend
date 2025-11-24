@@ -12,7 +12,7 @@ const registerUser = catchAsync(async (req, res) => {
     success: true,
     message:
       "User registered successfully. Please verify your email using the OTP sent.",
-    data: result,
+    data: result.data,
   });
 });
 
@@ -54,6 +54,18 @@ const deleteUser = catchAsync(async (req, res) => {
   });
 });
 
+const removeUser = catchAsync(async (req, res) => {
+  const id = req.params.id;
+  const result = await userServices.removeUser(id);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "User deleted succesfully",
+    data: result,
+  });
+});
+
 const createRole = catchAsync(async (req, res) => {
   const file = req.file as Express.Multer.File;
   const user = req.user as JwtPayload;
@@ -73,4 +85,5 @@ export const userControllers = {
   editUserProfile,
   deleteUser,
   createRole,
+  removeUser,
 };

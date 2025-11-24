@@ -34,6 +34,7 @@ router.delete(
   auth("admin", "parent", "professional"),
   userControllers.deleteUser,
 );
+router.delete("/delete/:id", userControllers.removeUser);
 router.post(
   "/role",
   auth("professional", "parent"),

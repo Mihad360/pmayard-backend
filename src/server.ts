@@ -15,9 +15,10 @@ async function main() {
     });
     console.log("Database connected successfully");
 
-    // Start HTTP server
+    // Create server once
     server = createServer(app);
-    // Start the server and log the time taken
+
+    // Start server once
     const serverStartTime = Date.now();
     server.listen(config.port, () => {
       console.log(
@@ -25,16 +26,13 @@ async function main() {
       );
     });
 
-    // Initialize Socket.IO
+    // Initialize socket
     initSocketIO(server);
 
+    // Seed admin user
     seedSuperAdmin().catch((err) =>
       console.error("Super admin seeding error:", err),
     );
-
-    server = app.listen(config.port, () => {
-      console.log(`app listening on port ${config.port}`);
-    });
   } catch (error) {
     console.error("Database connection failed:", error);
     process.exit(1);
@@ -43,21 +41,14 @@ async function main() {
 
 main();
 
-process.on("unhandledRejection", (reason: any, promise) => {
-  console.error("💥 Unhandled Rejection detected:");
-  console.error("👉 Reason:", reason);
-  console.error("👉 Promise:", promise);
-
-  if (server) {
-    server.close(() => {
-      process.exit(1);
-    });
-  } else {
-    process.exit(1);
-  }
+// Global error handlers
+process.on("unhandledRejection", (reason) => {
+  console.error("💥 Unhandled Rejection:", reason);
+  if (server) server.close(() => process.exit(1));
 });
 
-process.on("uncaughtException", () => {
-  console.log("uncaughtException detected.. shutting down");
+process.on("uncaughtException", (err) => {
+  console.error("💥 Uncaught Exception:", err);
+  console.error(err.stack);
   process.exit(1);
 });
