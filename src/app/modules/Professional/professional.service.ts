@@ -235,7 +235,7 @@ const getEachProfessional = async (id: string) => {
     select: "email",
   });
   if (!isSessionExist) {
-    throw new AppError(HttpStatus.NOT_FOUND, "Parent not found");
+    throw new AppError(HttpStatus.NOT_FOUND, "Professional not found");
   }
   return isSessionExist;
 };
@@ -272,10 +272,61 @@ const getUpcomingParentSessions = async (
   return { meta, result };
 };
 
+const editAvailability = async (
+  roleId: string,
+  payload: { day: string; timeSlots: any[] },
+) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const updated = await ProfessionalModel.findOneAndUpdate(
+      {
+        _id: roleId,
+        "availability.day": payload.day,
+      },
+      {
+        $set: {
+          "availability.$.timeSlots": payload.timeSlots,
+        },
+      },
+      { new: true, session },
+    );
+
+    if (!updated) {
+      const result = await ProfessionalModel.findByIdAndUpdate(
+        roleId,
+        {
+          $push: {
+            availability: {
+              day: payload.day,
+              timeSlots: payload.timeSlots,
+            },
+          },
+        },
+        { new: true, session },
+      );
+
+      await session.commitTransaction();
+      session.endSession();
+      return result;
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+    return updated;
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
+  }
+};
+
 export const professionalServices = {
   createProfessional,
   confirmSession,
   getAssignedParents,
   getEachProfessional,
   getUpcomingParentSessions,
+  editAvailability,
 };

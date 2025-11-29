@@ -57,6 +57,18 @@ const getEachProfessional = catchAsync(async (req, res) => {
   });
 });
 
+const editAvailability = catchAsync(async (req, res) => {
+  const id = req.params.roleId;
+  const result = await professionalServices.editAvailability(id, req.body);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "Professional details retrieved successfully",
+    data: result,
+  });
+});
+
 const getUpcomingParentSessions = catchAsync(async (req, res) => {
   const user = req.user as JwtPayload;
   const result = await professionalServices.getUpcomingParentSessions(
@@ -79,4 +91,5 @@ export const professionalControllers = {
   getAssignedParents,
   getEachProfessional,
   getUpcomingParentSessions,
+  editAvailability,
 };

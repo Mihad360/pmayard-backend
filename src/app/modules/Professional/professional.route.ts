@@ -37,5 +37,10 @@ router.post(
   auth("professional"),
   professionalControllers.confirmSession,
 );
+router.patch(
+  "/:roleId/availability",
+  auth("professional"),
+  professionalControllers.editAvailability,
+);
 
 export const ProfessionalRoutes = router;

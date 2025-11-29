@@ -26,6 +26,11 @@ router.get(
   auth("admin", "professional", "parent"),
   sessionControllers.getEachSession,
 );
+router.get(
+  "/:roleId/role",
+  auth("admin", "professional", "parent"),
+  sessionControllers.getEachRole,
+);
 router.patch(
   "/:sessionId/status",
   auth("parent", "professional"),

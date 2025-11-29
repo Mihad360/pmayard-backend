@@ -7,6 +7,7 @@ import AppError from "../../erros/AppError";
 import { SessionModel } from "./session.model";
 import { ProfessionalModel } from "../Professional/professional.model";
 import QueryBuilder from "../../../builder/QueryBuilder";
+import { ParentModel } from "../Parent/parent.model";
 
 const getMySessions = async (
   user: JwtPayload,
@@ -230,10 +231,46 @@ const getUpcomingSessions = async (
   return { meta, result };
 };
 
+const getEachRole = async (id: string, user: JwtPayload) => {
+  if (user.role === "professional") {
+    const parent = await ParentModel.findById(id).populate({
+      path: "user",
+      select: "-password -otp -expiresAt",
+    });
+
+    if (!parent) {
+      throw new AppError(HttpStatus.NOT_FOUND, "Parent not found");
+    }
+    return parent;
+  }
+
+  // If professional → search ProfessionalModel
+  if (user.role === "parent") {
+    const prof = await ProfessionalModel.findById(id)
+      .select("-availability")
+      .populate({
+        path: "user",
+        select: "-password -otp -expiresAt",
+      });
+
+    if (!prof) {
+      throw new AppError(HttpStatus.NOT_FOUND, "Professional not found");
+    }
+    return prof;
+  }
+
+  // For any other role
+  throw new AppError(
+    HttpStatus.BAD_REQUEST,
+    "Invalid role. Only parent/professional allowed",
+  );
+};
+
 export const sessionServices = {
   getMySessions,
   updateSessionStatus,
   getEachSession,
   getAssignedProfiles,
   getUpcomingSessions,
+  getEachRole,
 };

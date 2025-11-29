@@ -12,7 +12,8 @@ const getMySessions = catchAsync(async (req, res) => {
     statusCode: HttpStatus.OK,
     success: true,
     message: "Sessions retrieved successfully",
-    data: result,
+    meta: result.meta,
+    data: result.result,
   });
 });
 
@@ -65,10 +66,24 @@ const getUpcomingSessions = catchAsync(async (req, res) => {
   });
 });
 
+const getEachRole = catchAsync(async (req, res) => {
+  const id = req.params.roleId;
+  const user = req.user as JwtPayload;
+  const result = await sessionServices.getEachRole(id, user);
+
+  sendResponse(res, {
+    statusCode: HttpStatus.OK,
+    success: true,
+    message: "Parent details retrieved successfully",
+    data: result,
+  });
+});
+
 export const sessionControllers = {
   getMySessions,
   updateSessionStatus,
   getEachSession,
   getAssignedProfiles,
   getUpcomingSessions,
+  getEachRole,
 };
