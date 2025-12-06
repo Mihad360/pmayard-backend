@@ -274,47 +274,102 @@ const getUpcomingParentSessions = async (
 
 const editAvailability = async (
   roleId: string,
-  payload: { day: string; timeSlots: any[] },
+  payload: {
+    day: string;
+    timeSlots: { startTime: string; endTime: string; status?: string }[];
+  },
 ) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const updated = await ProfessionalModel.findOneAndUpdate(
-      {
-        _id: roleId,
-        "availability.day": payload.day,
-      },
-      {
-        $set: {
-          "availability.$.timeSlots": payload.timeSlots,
-        },
-      },
-      { new: true, session },
+    const { day, timeSlots } = payload;
+
+    // Find professional availability document
+    const professional =
+      await ProfessionalModel.findById(roleId).session(session);
+    if (!professional) {
+      throw new AppError(404, "Professional not found");
+    }
+
+    // Find availability for the day
+    // eslint-disable-next-line prefer-const
+    let dayAvailability = professional.availability?.find(
+      (a: any) => a.day === day,
     );
 
-    if (!updated) {
-      const result = await ProfessionalModel.findByIdAndUpdate(
+    // If day availability does NOT exist, create it with all provided timeSlots
+    if (!dayAvailability) {
+      const created = await ProfessionalModel.findByIdAndUpdate(
         roleId,
         {
           $push: {
             availability: {
-              day: payload.day,
-              timeSlots: payload.timeSlots,
+              day,
+              timeSlots,
             },
           },
         },
         { new: true, session },
       );
-
       await session.commitTransaction();
       session.endSession();
-      return result;
+      return created;
     }
+
+    // For each timeSlot in payload, update or add as needed
+    for (const timeSlot of timeSlots) {
+      // Try to find existing timeSlot by exact match of startTime and endTime
+      const slotIndex = dayAvailability.timeSlots.findIndex(
+        (slot: any) =>
+          slot.startTime === timeSlot.startTime &&
+          slot.endTime === timeSlot.endTime,
+      );
+
+      if (slotIndex === -1) {
+        // Time slot does not exist, so add it
+        await ProfessionalModel.findOneAndUpdate(
+          { _id: roleId, "availability.day": day },
+          { $push: { "availability.$.timeSlots": timeSlot } },
+          { session },
+        );
+      } else {
+        // Time slot exists, update fields like status (anything except startTime/endTime)
+        const updateFields: any = {};
+        for (const [key, value] of Object.entries(timeSlot)) {
+          if (key !== "startTime" && key !== "endTime") {
+            updateFields[
+              `availability.$[dayElem].timeSlots.$[slotElem].${key}`
+            ] = value;
+          }
+        }
+
+        if (Object.keys(updateFields).length > 0) {
+          await ProfessionalModel.findOneAndUpdate(
+            { _id: roleId },
+            { $set: updateFields },
+            {
+              session,
+              arrayFilters: [
+                { "dayElem.day": day },
+                {
+                  "slotElem.startTime": timeSlot.startTime,
+                  "slotElem.endTime": timeSlot.endTime,
+                },
+              ],
+            },
+          );
+        }
+      }
+    }
+
+    // Reload updated professional to return fresh data
+    const updatedProfessional =
+      await ProfessionalModel.findById(roleId).session(session);
 
     await session.commitTransaction();
     session.endSession();
-    return updated;
+    return updatedProfessional;
   } catch (error) {
     await session.abortTransaction();
     session.endSession();

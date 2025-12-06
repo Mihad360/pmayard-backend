@@ -4,7 +4,11 @@ import auth from "../../middlewares/auth";
 
 const router = express.Router();
 
-router.get("/", auth("admin", "professional"), eventControllers.getAllEvents);
+router.get(
+  "/",
+  auth("admin", "professional", "parent"),
+  eventControllers.getAllEvents,
+);
 router.post("/add-event", auth("admin"), eventControllers.addEvent);
 router.delete("/:eventId", auth("admin"), eventControllers.removeEvent);
 

@@ -32,6 +32,8 @@ export interface IEditUserProfilePayload {
   profileImage?: string; // Profile image URL
   phoneNumber?: string; // Optional phone number
   name?: string; // Optional name
+  subjects?: string[];
+  bio?: string;
 }
 
 export interface IUserWithPopulatedRole extends IUser {

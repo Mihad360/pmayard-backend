@@ -96,7 +96,7 @@ const getMe = async (user: JwtPayload) => {
 const editUserProfile = async (
   id: string,
   file: Express.Multer.File,
-  payload: Partial<IEditUserProfilePayload>, // Using the payload type defined above
+  payload: Partial<IEditUserProfilePayload>,
 ) => {
   // Find the user by ID
   const user = await UserModel.findById(id);
@@ -106,6 +106,7 @@ const editUserProfile = async (
   if (user.isDeleted) {
     throw new AppError(HttpStatus.FORBIDDEN, "The user is blocked");
   }
+
   let userUpdateData: IProfessional | IParent | IUser | null = null;
   const updateData: Partial<IEditUserProfilePayload> = {};
 
@@ -113,8 +114,10 @@ const editUserProfile = async (
   if (payload.email) {
     updateData.email = payload.email;
   }
+
+  // Handle image upload
   if (file) {
-    const imageName = `${payload.name || "default"}`; // Ensure image name is provided
+    const imageName = `${payload.name || "default"}`;
     const imageInfo = await sendFileToCloudinary(
       file.buffer,
       imageName,
@@ -123,17 +126,18 @@ const editUserProfile = async (
     updateData.profileImage = imageInfo.secure_url;
   }
 
-  // Handle role-specific logic
+  // ==================================================
+  // 🔥 ROLE LOGIC STARTS HERE
+  // ==================================================
+
+  // ---------- ADMIN ----------
   if (user.role === "admin") {
-    // Admin: Only allow email to be updated
     const admin = await UserModel.findById(user._id);
-    if (!admin) {
+    if (!admin)
       throw new AppError(HttpStatus.NOT_FOUND, "admin role not found");
-    }
-    if (payload.email) {
-      updateData.email = payload.email;
-    }
+
     if (payload.name) updateData.name = payload.name;
+
     userUpdateData = await UserModel.findByIdAndUpdate(
       admin._id,
       {
@@ -142,19 +146,27 @@ const editUserProfile = async (
       },
       { new: true },
     ).select("-password");
-  } else if (user.role === "professional") {
-    // Professional: Find roleId in the Professional model and update other fields
+  }
+
+  // ---------- PROFESSIONAL ----------
+  else if (user.role === "professional") {
     const professional = await ProfessionalModel.findById(user.roleId);
     if (!professional) {
       throw new AppError(HttpStatus.NOT_FOUND, "Professional role not found");
     }
 
-    // Update the fields for the professional
+    // Base field updates
     if (payload.name) updateData.name = payload.name;
     if (payload.phoneNumber) updateData.phoneNumber = payload.phoneNumber;
-    // Any additional professional-specific fields can go here
 
-    // Update the professional model data
+    // 🔥 SUBJECT UPDATE (Professional)
+    if (payload.subjects) {
+      updateData.subjects = payload.subjects; // subjects from role model
+    }
+    if (payload.bio) {
+      updateData.bio = payload.bio; // subjects from role model
+    }
+
     userUpdateData = await ProfessionalModel.findByIdAndUpdate(
       professional._id,
       {
@@ -162,19 +174,27 @@ const editUserProfile = async (
       },
       { new: true },
     ).select("-availability");
-  } else if (user.role === "parent") {
-    // Parent: Find roleId in the Parent model and update other fields
+  }
+
+  // ---------- PARENT ----------
+  else if (user.role === "parent") {
     const parent = await ParentModel.findById(user.roleId);
     if (!parent) {
       throw new AppError(HttpStatus.NOT_FOUND, "Parent role not found");
     }
 
-    // Update the fields for the parent
+    // Base field updates
     if (payload.name) updateData.name = payload.name;
     if (payload.phoneNumber) updateData.phoneNumber = payload.phoneNumber;
-    // Any additional parent-specific fields can go here
 
-    // Update the parent model data
+    // 🔥 SUBJECT UPDATE (Parent)
+    if (payload.subjects) {
+      updateData.subjects = payload.subjects; // subjects from role model
+    }
+    if (payload.bio) {
+      updateData.bio = payload.bio; // subjects from role model
+    }
+
     userUpdateData = await ParentModel.findByIdAndUpdate(
       parent._id,
       {
@@ -184,16 +204,17 @@ const editUserProfile = async (
     ).select("-availability");
   }
 
+  // ==================================================
+  // 🔥 UPDATE USER EMAIL (if provided)
+  // ==================================================
   if (updateData.email) {
-    // Update the user document with the specified data (email only)
     await UserModel.findByIdAndUpdate(
       id,
-      { $set: { email: updateData.email } }, // Only updating email in UserModel
+      { $set: { email: updateData.email } },
       { new: true },
     ).select("-password -otp -expiresAt -isVerified -passwordChangedAt");
-
-    return userUpdateData;
   }
+  console.log(userUpdateData);
   return userUpdateData;
 };
 

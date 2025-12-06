@@ -123,15 +123,17 @@ const getMessages = async (conversationId: string, user: JwtPayload) => {
       throw new AppError(HttpStatus.NOT_FOUND, "Conversation not found");
     }
 
-    const updateIsRead = await Message.findByIdAndUpdate(
-      conversation.lastMsg,
-      {
-        is_read: true,
-      },
-      { new: true },
-    );
-    if (!updateIsRead) {
-      throw new AppError(HttpStatus.BAD_REQUEST, "Message update failed");
+    if (conversation.lastMsg) {
+      const updateIsRead = await Message.findByIdAndUpdate(
+        conversation.lastMsg,
+        {
+          is_read: true,
+        },
+        { new: true },
+      );
+      if (!updateIsRead) {
+        throw new AppError(HttpStatus.BAD_REQUEST, "Message update failed");
+      }
     }
 
     let result;

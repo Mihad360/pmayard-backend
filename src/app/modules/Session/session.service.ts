@@ -123,25 +123,11 @@ const getAssignedProfiles = async (user: JwtPayload) => {
   }
 
   let filter = {};
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let populateConfig: any = {};
 
-  // 👉 Check role
   if (isUserExist.role === "parent") {
-    // Parent → get assigned professionals
     filter = { parent: isUserExist.roleId, isDeleted: false };
-    populateConfig = {
-      path: "professional",
-      select: "-availability",
-      populate: { path: "user", select: "email role" },
-    };
   } else if (isUserExist.role === "professional") {
-    // Professional → get assigned parents
     filter = { professional: isUserExist.roleId, isDeleted: false };
-    populateConfig = {
-      path: "parent",
-      populate: { path: "user", select: "email role" },
-    };
   } else {
     throw new AppError(
       HttpStatus.BAD_REQUEST,
@@ -149,10 +135,17 @@ const getAssignedProfiles = async (user: JwtPayload) => {
     );
   }
 
-  // 👉 Query
   const session = await SessionModel.find(filter)
     .select("-day -date -time -subject -status -code -isSessionVerified")
-    .populate(populateConfig);
+    .populate({
+      path: "parent",
+      populate: { path: "user", select: "email role" },
+    })
+    .populate({
+      path: "professional",
+      select: "-availability",
+      populate: { path: "user", select: "email role" },
+    });
 
   if (!session) {
     throw new AppError(HttpStatus.NOT_FOUND, "Session not found");
@@ -173,35 +166,18 @@ const getUpcomingSessions = async (
   }
 
   let filter: any = {};
-  let populateConfig: any = {};
 
-  // ==========================
-  // 🔍 ROLE CHECK
-  // ==========================
   if (isUserExist.role === "parent") {
-    // Parent → upcoming sessions with professionals
     filter = {
       parent: isUserExist.roleId,
       isDeleted: false,
       status: "Upcoming",
     };
-
-    populateConfig = {
-      path: "professional",
-      select: "-availability",
-      populate: { path: "user", select: "email" },
-    };
   } else if (isUserExist.role === "professional") {
-    // Professional → upcoming sessions with parents
     filter = {
       professional: isUserExist.roleId,
       isDeleted: false,
-      status: { $in: ["Upcoming", "Confirmed"] }, // as in your original code
-    };
-
-    populateConfig = {
-      path: "parent",
-      populate: { path: "user", select: "email" },
+      status: { $in: ["Upcoming", "Confirmed"] },
     };
   } else {
     throw new AppError(
@@ -210,21 +186,23 @@ const getUpcomingSessions = async (
     );
   }
 
-  // ==========================
-  // 🔍 QUERY BUILDER
-  // ==========================
-  const session = new QueryBuilder(
-    SessionModel.find(filter).populate(populateConfig),
-    query,
-  ).filter();
+  // 🔥 FULL POPULATE (parent + professional)
+  const sessionQuery = SessionModel.find(filter).populate({
+    path: "parent professional",
+    select: "-availability",
+    populate: {
+      path: "user",
+      select: "email",
+    },
+  });
+
+  // Apply Query Builder (pagination, filtering)
+  const session = new QueryBuilder(sessionQuery, query).filter();
 
   if (!session) {
-    throw new AppError(HttpStatus.NOT_FOUND, "session not found");
+    throw new AppError(HttpStatus.NOT_FOUND, "Session not found");
   }
 
-  // ==========================
-  // 📌 Pagination + Data
-  // ==========================
   const meta = await session.countTotal();
   const result = await session.modelQuery;
 
