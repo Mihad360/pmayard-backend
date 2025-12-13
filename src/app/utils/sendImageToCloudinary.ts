@@ -1,0 +1,106 @@
+/* eslint-disable @typescript-eslint/no-unsafe-function-type */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { v2 as cloudinary, UploadApiResponse } from "cloudinary";
+import config from "../config";
+import multer, { StorageEngine } from "multer";
+import path from "path";
+
+// Cloudinary config
+cloudinary.config({
+  cloud_name: config.cloudinary_name,
+  api_key: config.cloudinary_api_key,
+  api_secret: config.cloudinary_api_secret,
+});
+
+// Upload Function
+export const sendFileToCloudinary = (
+  fileBuffer: Buffer,
+  fileName: string,
+  mimetype: string,
+): Promise<UploadApiResponse> => {
+  return new Promise((resolve, reject) => {
+    if (!fileBuffer) return reject(new Error("Missing file buffer"));
+    if (!mimetype) return reject(new Error("Missing mimetype"));
+
+    const nameWithoutExt = path.parse(fileName).name;
+
+    // ============================
+    // 1️⃣ IMAGE Upload
+    // ============================
+    if (mimetype.startsWith("image/")) {
+      const base64Image = fileBuffer.toString("base64");
+      const dataUri = `data:${mimetype};base64,${base64Image}`;
+
+      cloudinary.uploader.upload(
+        dataUri,
+        {
+          public_id: nameWithoutExt,
+          resource_type: "image",
+          type: "upload",
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          if (!result) return reject(new Error("No result"));
+          resolve(result);
+        },
+      );
+    }
+
+    // ============================
+    // 2️⃣ PDF + WORD Uploads (raw)
+    // ============================
+    else if (
+      mimetype === "application/pdf" ||
+      mimetype === "application/msword" ||
+      mimetype ===
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ) {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          public_id: fileName,
+          resource_type: "raw",
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          if (!result) return reject(new Error("No result"));
+          resolve(result);
+        },
+      );
+      uploadStream.end(fileBuffer);
+    }
+
+    // ============================
+    // 3️⃣ AUDIO Upload (mp3, wav, webm, m4a, ogg etc.)
+    // Cloudinary requires audio under resource_type: "video"
+    // ============================
+    else if (mimetype.startsWith("audio/")) {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          public_id: nameWithoutExt,
+          resource_type: "video", // REQUIRED for audio files
+          type: "upload",
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          if (!result) return reject(new Error("No result"));
+          resolve(result);
+        },
+      );
+      uploadStream.end(fileBuffer);
+    }
+
+    // ============================
+    // ❌ Unsupported file
+    // ============================
+    else {
+      return reject(new Error("Unsupported file type"));
+    }
+  });
+};
+
+// Multer memory storage for receiving files
+const storage: StorageEngine = multer.memoryStorage();
+
+export const upload = multer({
+  storage,
+});
